@@ -12,16 +12,24 @@
 #        bash /tmp/migrate-to-shared.sh
 #
 # Optional: INSIGHTRAG_DIR (default /opt/insightrag), GYMOS_DIR (default
-# /opt/gym-os), EDGE_DIR (default /opt/edge).
+# /opt/gym-os), EDGE_DIR (default /opt/edge), GYMOS_REPO_URL (default the
+# gaurav-49/Gym-OS GitHub repo).
 #
 # What it does, in order:
 #   1. Creates the shared_edge Docker network (safe to re-run).
-#   2. Pulls each app to a commit that has docker-compose.shared-edge.yml.
+#   2. Pulls InsightRAG to a commit that has docker-compose.shared-edge.yml
+#      — it must already be deployed once standalone (this only adds it to
+#      the shared network; it never bootstraps InsightRAG from scratch).
 #   3. Redeploys InsightRAG with that overlay instead of docker-compose.prod.yml
 #      — --remove-orphans retires its old Caddy container, since the new
 #      file set no longer defines one.
-#   4. Deploys GYM OS the same way (schema first, then the app).
-#   5. Brings up the one shared Caddy, fronting both.
+#   4. Clones GYM OS if it isn't on this server yet, and generates its .env
+#      if missing — deploy/install.sh can never be GYM OS's first deploy on
+#      a server that already runs another app's Caddy (it would fail to bind
+#      80/443), so this script is GYM OS's bootstrap here, not a follow-up
+#      to one.
+#   5. Applies the GYM OS schema, then deploys the app.
+#   6. Brings up the one shared Caddy, fronting both.
 #
 # Idempotent: re-running it after either app updates just redeploys both.
 
@@ -29,6 +37,7 @@ set -euo pipefail
 
 INSIGHTRAG_DIR="${INSIGHTRAG_DIR:-/opt/insightrag}"
 GYMOS_DIR="${GYMOS_DIR:-/opt/gym-os}"
+GYMOS_REPO_URL="${GYMOS_REPO_URL:-https://github.com/gaurav-49/Gym-OS.git}"
 EDGE_DIR="${EDGE_DIR:-/opt/edge}"
 INSIGHTRAG_DOMAIN="${INSIGHTRAG_DOMAIN:?set INSIGHTRAG_DOMAIN, e.g. insightrag.YOUR-IP.sslip.io}"
 GYMOS_DOMAIN="${GYMOS_DOMAIN:?set GYMOS_DOMAIN, e.g. gym.YOUR-IP.sslip.io}"
@@ -39,10 +48,8 @@ die() { printf '\n\033[1;31mError:\033[0m %s\n' "$*" >&2; exit 1; }
 [[ "$(id -u)" -eq 0 ]] || die "run as root"
 command -v docker >/dev/null || die "Docker is not installed"
 docker compose version >/dev/null 2>&1 || die "Docker Compose v2 is required"
-[[ -d "$INSIGHTRAG_DIR/.git" ]] || die "$INSIGHTRAG_DIR is not an InsightRAG checkout (set INSIGHTRAG_DIR)"
-[[ -d "$GYMOS_DIR/.git" ]]      || die "$GYMOS_DIR is not a GYM OS checkout (set GYMOS_DIR)"
+[[ -d "$INSIGHTRAG_DIR/.git" ]] || die "$INSIGHTRAG_DIR is not an InsightRAG checkout (set INSIGHTRAG_DIR) — deploy InsightRAG there first"
 [[ -f "$INSIGHTRAG_DIR/.env" ]] || die "$INSIGHTRAG_DIR/.env is missing — InsightRAG needs to already be deployed once (its JWT_SECRET lives there)"
-[[ -f "$GYMOS_DIR/.env" ]]      || die "$GYMOS_DIR/.env is missing — deploy GYM OS standalone once first (deploy/install.sh), then re-run this"
 
 say "Creating the shared_edge network (safe if it already exists)"
 docker network inspect shared_edge >/dev/null 2>&1 || docker network create shared_edge
@@ -59,12 +66,31 @@ say "Redeploying InsightRAG without its own Caddy (shared Caddy fronts it now)"
     -f docker-compose.yml -f docker-compose.shared-edge.yml \
     up -d --build --remove-orphans --wait --wait-timeout 300 )
 
-say "Updating GYM OS"
-git -C "$GYMOS_DIR" fetch -q origin main
-git -C "$GYMOS_DIR" checkout -q main
-git -C "$GYMOS_DIR" reset -q --hard origin/main
+if [[ -d "$GYMOS_DIR/.git" ]]; then
+  say "Updating GYM OS"
+  git -C "$GYMOS_DIR" fetch -q origin main
+  git -C "$GYMOS_DIR" checkout -q main
+  git -C "$GYMOS_DIR" reset -q --hard origin/main
+else
+  say "GYM OS is not on this server yet — cloning it into $GYMOS_DIR"
+  mkdir -p "$(dirname "$GYMOS_DIR")"
+  git clone -q --branch main "$GYMOS_REPO_URL" "$GYMOS_DIR"
+fi
 [[ -f "$GYMOS_DIR/docker-compose.shared-edge.yml" ]] \
   || die "$GYMOS_DIR is on a commit without docker-compose.shared-edge.yml"
+
+if [[ ! -f "$GYMOS_DIR/.env" ]]; then
+  say "Creating GYM OS's .env with generated secrets"
+  cat > "$GYMOS_DIR/.env" <<ENV
+JWT_SECRET=$(openssl rand -hex 32)
+DB_PASSWORD=$(openssl rand -hex 24)
+DB_NAME=gymdb
+DB_USER=gymos
+ENV
+  chmod 600 "$GYMOS_DIR/.env"
+else
+  say "Keeping GYM OS's existing .env (secrets unchanged)"
+fi
 
 say "Applying the GYM OS schema"
 ( cd "$GYMOS_DIR" && \

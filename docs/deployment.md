@@ -219,14 +219,19 @@ sudo INSIGHTRAG_DOMAIN=insightrag.YOUR-IP.sslip.io \
 ```
 
 It expects InsightRAG already deployed once standalone (so its `.env` and
-`JWT_SECRET` exist) and GYM OS deployed once standalone too — run
-`deploy/install.sh` for GYM OS first if it isn't. The script then:
+`JWT_SECRET` exist) — there's no way around that, since it only adds
+InsightRAG to the shared network rather than bootstrapping it from scratch.
+GYM OS is the opposite: **don't** run `deploy/install.sh` for it first — on a
+server that already runs another app's Caddy, GYM OS's own Caddy would fail
+to bind 80/443, so this script clones GYM OS and generates its `.env` itself
+if it isn't already on the server. The script then:
 
 1. creates the `shared_edge` Docker network,
 2. redeploys InsightRAG with `docker-compose.shared-edge.yml` — `--remove-orphans`
    retires its old Caddy container, since the new file set doesn't define one,
-3. deploys GYM OS the same way (schema, then the app),
-4. brings up the one shared Caddy in `deploy/edge/`, fronting both.
+3. clones GYM OS (if it isn't there yet) and generates its `.env`,
+4. applies the GYM OS schema, then deploys the app,
+5. brings up the one shared Caddy in `deploy/edge/`, fronting both.
 
 Two distinct hostnames on one IP need no DNS of your own — sslip.io resolves
 any subdomain to the IP embedded in it, so `insightrag.203-0-113-10.sslip.io`
