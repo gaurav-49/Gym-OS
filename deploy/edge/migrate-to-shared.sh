@@ -120,6 +120,19 @@ if [[ "${SEED_DEMO:-0}" == "1" ]]; then
       run --rm -T migrate sh -c "node seed-demo.js" < /dev/null )
 fi
 
+# Before the app starts taking real records. A local nightly dump does not
+# survive the machine going away, but it does cover the things that actually
+# happen: a bad migration, a mistaken delete, a container rebuild.
+say "Installing the nightly database backup"
+chmod +x "$GYMOS_DIR/deploy/backup.sh"
+cat > /etc/cron.d/gym-os-backup <<CRON
+# GYM OS nightly database backup — installed by deploy/edge/migrate-to-shared.sh
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+17 3 * * * root GYMOS_DIR=$GYMOS_DIR $GYMOS_DIR/deploy/backup.sh >> /var/log/gym-os-backup.log 2>&1
+CRON
+chmod 644 /etc/cron.d/gym-os-backup
+
 say "Deploying GYM OS without its own Caddy"
 ( cd "$GYMOS_DIR" && docker compose -p gym-os \
     -f docker-compose.yml -f docker-compose.shared-edge.yml \

@@ -78,6 +78,10 @@ on:
         description: "[shared_edge] Also load the demo gym (120 members, every module)"
         type: boolean
         default: false
+      restore_dump:
+        description: "Path on the server to a pg_dump to restore into GYM OS first, e.g. /tmp/gymos.dump. REPLACES the database. Leave blank to skip."
+        required: false
+        default: ""
 
 # One deploy at a time. Two installers racing on the same machine would fight
 # over the same directories and the Docker daemon.
@@ -173,6 +177,54 @@ jobs:
 
           ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o ConnectTimeout=20 \
             "$USER@$HOST" 'sudo -E bash -s' < /tmp/remote.sh
+
+      # Runs before the deploy so migrate.js then brings the restored schema
+      # up to date in the same run — a dump from a developer's machine is
+      # often a release or two behind.
+      - name: Restore a database dump
+        if: inputs.restore_dump != ''
+        env:
+          HOST: ${{ secrets.ORACLE_HOST }}
+          USER: ${{ secrets.ORACLE_USER }}
+          DUMP: ${{ inputs.restore_dump }}
+        run: |
+          {
+            echo "set -euo pipefail"
+            echo "DUMP=$(printf '%q' "$DUMP")"
+            cat <<'REMOTE'
+          cd /opt/gym-os
+          [ -f "$DUMP" ] || { echo "::error::$DUMP not found on the server"; exit 1; }
+
+          db_user=$(grep -E '^DB_USER=' .env 2>/dev/null | cut -d= -f2- || true); db_user=${db_user:-gymos}
+          db_name=$(grep -E '^DB_NAME=' .env 2>/dev/null | cut -d= -f2- || true); db_name=${db_name:-gymdb}
+
+          # Take a dump of what is there first. Restoring is destructive and
+          # this is the only copy of whatever it replaces.
+          if docker compose -p gym-os ps --status running --services 2>/dev/null | grep -qx postgres; then
+            echo "==> Backing up the current database before replacing it"
+            GYMOS_DIR=/opt/gym-os ./deploy/backup.sh || echo "warning: pre-restore backup failed"
+          fi
+
+          echo "==> Restoring $DUMP"
+          docker compose -p gym-os cp "$DUMP" postgres:/tmp/restore.dump
+          # pg_restore reports non-fatal noise (ownership, extensions) as
+          # errors; --exit-on-error is off, so check the data afterwards
+          # rather than trusting the exit code.
+          docker compose -p gym-os exec -T postgres \
+            pg_restore -U "$db_user" -d "$db_name" --clean --if-exists --no-owner \
+            /tmp/restore.dump < /dev/null || echo "pg_restore reported warnings (usually ownership) — verifying below"
+          docker compose -p gym-os exec -T postgres rm -f /tmp/restore.dump < /dev/null || true
+
+          members=$(docker compose -p gym-os exec -T postgres \
+            psql -U "$db_user" -d "$db_name" -tAc "SELECT count(*) FROM clients" < /dev/null 2>/dev/null | tr -d '[:space:]' || true)
+          staff=$(docker compose -p gym-os exec -T postgres \
+            psql -U "$db_user" -d "$db_name" -tAc "SELECT count(*) FROM users" < /dev/null 2>/dev/null | tr -d '[:space:]' || true)
+          echo "==> Restored: ${members:-?} member record(s), ${staff:-?} staff account(s)"
+          REMOTE
+          } > /tmp/restore.sh
+
+          ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o ConnectTimeout=20 \
+            "$USER@$HOST" 'sudo -E bash -s' < /tmp/restore.sh
 
       - name: Run the shared-edge migration
         if: inputs.shared_edge == true
