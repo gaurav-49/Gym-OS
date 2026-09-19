@@ -216,7 +216,10 @@ jobs:
           sudo docker compose -p gym-os ps
           echo
           echo "-- health (from inside the app container) --"
-          sudo docker compose -p gym-os exec -T app curl -fsS localhost:8080/actuator/health || echo "health check failed"
+          # < /dev/null on every exec: this whole block is a heredoc on the
+          # remote shell's stdin, and docker compose exec forwards stdin to
+          # the container -- without it, it eats the rest of THIS script.
+          sudo docker compose -p gym-os exec -T app curl -fsS localhost:8080/actuator/health < /dev/null || echo "health check failed"
           echo
           echo "-- staff portal / --"
           curl -sS -o /dev/null -w "HTTP %{http_code}\n" "https://$domain/" || echo "not reachable over HTTPS yet"
@@ -258,9 +261,15 @@ jobs:
           # grep that matches nothing exits 1 and would end the check.
           db_user=$(sudo grep -E '^DB_USER=' .env 2>/dev/null | cut -d= -f2- || true); db_user=${db_user:-gymos}
           db_name=$(sudo grep -E '^DB_NAME=' .env 2>/dev/null | cut -d= -f2- || true); db_name=${db_name:-gymdb}
+          # < /dev/null: this block is a heredoc on the remote shell's stdin,
+          # and docker compose exec forwards stdin to the container. Without
+          # it the exec swallows the rest of this script, bash reaches EOF and
+          # exits 0 -- the check then "passes" having tested nothing, which is
+          # exactly what happened on the run before this comment existed.
           admins=$(sudo docker compose -p gym-os exec -T postgres \
             psql -U "$db_user" -d "$db_name" -tAc \
-            "SELECT count(*) FROM users WHERE role = 'admin'" 2>/dev/null | tr -d '[:space:]')
+            "SELECT count(*) FROM users WHERE role = 'admin'" < /dev/null 2>/dev/null \
+            | tr -d '[:space:]' || true)
           if [ "${admins:-0}" -ge 1 ] 2>/dev/null; then
             echo "$admins admin account(s) present — sign-in is possible"
           else
