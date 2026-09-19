@@ -1,0 +1,50 @@
+###############################################################################
+#  DIET PLANS — meals by day
+#  /api/diets
+#
+#  /api/diet is the older spelling and still answers; /api/diets is the one to
+#  use.
+#
+#  Row ids in these samples are placeholders — take a real one from the
+#  list request above it, or from the variable it captures.
+#  Send the sign-in block first — it sets the token every request below uses.
+#  Bodies work as-is against the demo data from db/seed-demo.js.
+#  [CHANGES DATA] marks anything that writes.
+###############################################################################
+
+@host = http://localhost:8080
+@json = Content-Type: application/json
+
+### Sign in as staff  ← run me first
+# @name login
+POST {{host}}/api/auth/login
+{{json}}
+
+{ "username": "admin", "password": "admin123" }
+
+###
+@staff = {{login.response.body.token}}
+
+
+### A member's plan
+GET {{host}}/api/diets?member_id=1
+Authorization: Bearer {{staff}}
+
+### Add a meal  [CHANGES DATA]
+POST {{host}}/api/diets
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "member_id": 1, "meal_time": "Breakfast", "items": "4 egg whites, 2 rotis, a bowl of curd",
+  "calories": 520, "notes": "Within 45 minutes of training" }
+
+### Update  [CHANGES DATA]
+PUT {{host}}/api/diets/1
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "calories": 560 }
+
+### Delete  [CHANGES DATA]
+DELETE {{host}}/api/diets/99999
+Authorization: Bearer {{staff}}

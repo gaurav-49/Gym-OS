@@ -1,0 +1,16 @@
+# Secrets — never commit a real .env (see each backend's .env.example)
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+target/
+
+# Logs & OS noise
+*.log
+npm-debug.log*
+.DS_Store

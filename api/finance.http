@@ -1,0 +1,35 @@
+###############################################################################
+#  FINANCE — income against spending
+#  /api/finance
+#
+#  Membership fees, PT, retail and locker rent on one side; expenses and
+#  payroll on the other.
+#
+#  Row ids in these samples are placeholders — take a real one from the
+#  list request above it, or from the variable it captures.
+#  Send the sign-in block first — it sets the token every request below uses.
+#  Bodies work as-is against the demo data from db/seed-demo.js.
+#  [CHANGES DATA] marks anything that writes.
+###############################################################################
+
+@host = http://localhost:8080
+@json = Content-Type: application/json
+
+### Sign in as staff  ← run me first
+# @name login
+POST {{host}}/api/auth/login
+{{json}}
+
+{ "username": "admin", "password": "admin123" }
+
+###
+@staff = {{login.response.body.token}}
+
+
+### Profit and loss for a period
+GET {{host}}/api/finance/summary?from=2026-09-01&to=2026-09-30
+Authorization: Bearer {{staff}}
+
+### This month so far
+GET {{host}}/api/finance/summary
+Authorization: Bearer {{staff}}

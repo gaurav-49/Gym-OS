@@ -1,0 +1,50 @@
+###############################################################################
+#  MEMBER CLASSES — booking from the portal
+#  /api/member/classes
+#
+#  A member books and cancels their own classes here. A full class puts them on
+#  the waitlist, and a cancellation promotes the first person waiting.
+#
+#  Row ids in these samples are placeholders — take a real one from the
+#  list request above it, or from the variable it captures.
+#  Send the sign-in block first — it sets the token every request below uses.
+#  Bodies work as-is against the demo data from db/seed-demo.js.
+#  [CHANGES DATA] marks anything that writes.
+###############################################################################
+
+@host = http://localhost:8080
+@json = Content-Type: application/json
+
+### Sign in as a member  ← run me first
+# 5050 is the demo member who has a trainer, a PT plan and every tab filled.
+# @name memberLogin
+POST {{host}}/api/member/login
+{{json}}
+
+{ "member_code": "5050", "password": "admin" }
+
+###
+@member = {{memberLogin.response.body.token}}
+
+
+### The timetable a member can book from
+GET {{host}}/api/member/classes
+Authorization: Bearer {{member}}
+
+### What this member has booked
+GET {{host}}/api/member/classes/my
+Authorization: Bearer {{member}}
+
+### Book one  [CHANGES DATA]
+POST {{host}}/api/member/classes/1/book
+Authorization: Bearer {{member}}
+
+### Cancel it  [CHANGES DATA]
+POST {{host}}/api/member/classes/1/cancel
+Authorization: Bearer {{member}}
+
+### Verify a member before booking at a kiosk
+POST {{host}}/api/member/classes/verify
+{{json}}
+
+{ "member_code": "5050" }

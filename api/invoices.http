@@ -1,0 +1,65 @@
+###############################################################################
+#  INVOICES — numbered, tax-bearing documents
+#  /api/invoices
+#
+#  An invoice is the tax document over a payment or a counter sale. Line items
+#  carry their own rate, so one invoice can mix zero-rated and taxed lines.
+#
+#  Row ids in these samples are placeholders — take a real one from the
+#  list request above it, or from the variable it captures.
+#  Send the sign-in block first — it sets the token every request below uses.
+#  Bodies work as-is against the demo data from db/seed-demo.js.
+#  [CHANGES DATA] marks anything that writes.
+###############################################################################
+
+@host = http://localhost:8080
+@json = Content-Type: application/json
+
+### Sign in as staff  ← run me first
+# @name login
+POST {{host}}/api/auth/login
+{{json}}
+
+{ "username": "admin", "password": "admin123" }
+
+###
+@staff = {{login.response.body.token}}
+
+
+### All invoices
+# @name list
+GET {{host}}/api/invoices
+Authorization: Bearer {{staff}}
+
+###
+@invoiceId = {{list.response.body.$[0].id}}
+
+### One, with its lines
+GET {{host}}/api/invoices/{{invoiceId}}
+Authorization: Bearer {{staff}}
+
+### Raise one  [CHANGES DATA]
+POST {{host}}/api/invoices
+Authorization: Bearer {{staff}}
+{{json}}
+
+{
+  "member_id": 1,
+  "invoice_date": "2026-09-06",
+  "notes": "Quarterly membership",
+  "items": [
+    { "description": "Quarterly membership", "quantity": 1, "unit_price": 5400, "tax_rate": 18 },
+    { "description": "Joining fee", "quantity": 1, "unit_price": 500, "tax_rate": 0 }
+  ]
+}
+
+### Mark it settled  [CHANGES DATA]
+PUT {{host}}/api/invoices/1
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "status": "paid" }
+
+### Delete  [CHANGES DATA]
+DELETE {{host}}/api/invoices/99999
+Authorization: Bearer {{staff}}

@@ -1,0 +1,70 @@
+###############################################################################
+#  REFERRALS — member-get-member
+#  /api/referrals
+#
+#  Share a code, the friend gives it at the desk, the friend pays in full, and
+#  the referrer's NEXT renewal is discounted — once — with the reason printed
+#  on the receipt. A code is the first four letters of the name plus the padded
+#  member ID: Gaurav, ID 1 → GAUR0001.
+#
+#  Row ids in these samples are placeholders — take a real one from the
+#  list request above it, or from the variable it captures.
+#  Send the sign-in block first — it sets the token every request below uses.
+#  Bodies work as-is against the demo data from db/seed-demo.js.
+#  [CHANGES DATA] marks anything that writes.
+###############################################################################
+
+@host = http://localhost:8080
+@json = Content-Type: application/json
+
+### Sign in as staff  ← run me first
+# @name login
+POST {{host}}/api/auth/login
+{{json}}
+
+{ "username": "admin", "password": "admin123" }
+
+###
+@staff = {{login.response.body.token}}
+
+
+### Everyone who has been referred
+GET {{host}}/api/referrals
+Authorization: Bearer {{staff}}
+
+### The programme at a glance
+GET {{host}}/api/referrals/summary
+Authorization: Bearer {{staff}}
+
+### Whose code is this? — what the desk calls while onboarding
+GET {{host}}/api/referrals/code/NEHA5043
+Authorization: Bearer {{staff}}
+
+### Record an introduction  [CHANGES DATA]
+POST {{host}}/api/referrals
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "referrer_id": 1, "referred_name": "Rahul Sharma", "referred_phone": "9876500001" }
+
+### Update one  [CHANGES DATA]
+PUT {{host}}/api/referrals/1
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "status": "joined", "notes": "Signed up on the 6th" }
+
+### Mark them joined  [CHANGES DATA]
+POST {{host}}/api/referrals/1/joined
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "converted_member_id": 2 }
+
+### Bank the reward  [CHANGES DATA]
+POST {{host}}/api/referrals/1/reward
+Authorization: Bearer {{staff}}
+
+### Delete  [CHANGES DATA]
+DELETE {{host}}/api/referrals/99999
+Authorization: Bearer {{staff}}

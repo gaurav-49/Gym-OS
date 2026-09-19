@@ -1,0 +1,82 @@
+###############################################################################
+#  PAYMENTS — the money ledger
+#  /api/payments
+#
+#  Every row records what it bought, and that is what the receipt prints:
+#    purpose       membership | pt | dues | other
+#    plan_name     the plan as it was named on the day
+#    period_start  \ the term covered; both null on a dues collection, which
+#    period_end    / buys no new term
+#    reference_id  the PT subscription a pt payment paid for
+#    discount      what came off the list price (a referral reward)
+#  Stamped at write time, never joined at read time — a plan renamed next year
+#  must not rewrite a receipt already in someone's hands.
+#
+#  Row ids in these samples are placeholders — take a real one from the
+#  list request above it, or from the variable it captures.
+#  Send the sign-in block first — it sets the token every request below uses.
+#  Bodies work as-is against the demo data from db/seed-demo.js.
+#  [CHANGES DATA] marks anything that writes.
+###############################################################################
+
+@host = http://localhost:8080
+@json = Content-Type: application/json
+
+### Sign in as staff  ← run me first
+# @name login
+POST {{host}}/api/auth/login
+{{json}}
+
+{ "username": "admin", "password": "admin123" }
+
+###
+@staff = {{login.response.body.token}}
+
+
+### Everything taken
+GET {{host}}/api/payments
+Authorization: Bearer {{staff}}
+
+### One member's ledger
+GET {{host}}/api/payments?member_id=1
+Authorization: Bearer {{staff}}
+
+### Record one at the desk  [CHANGES DATA]
+POST {{host}}/api/payments
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "member_id": 1, "amount": 800, "method": "Cash", "note": "Balance cleared at the desk" }
+
+### Rejected: dated in the future → 400
+# Money the gym has not been given yet, landing in this month's takings.
+POST {{host}}/api/payments
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "member_id": 1, "amount": 100, "payment_date": "2027-09-06" }
+
+### Rejected: a payment method nobody accepts → 400
+POST {{host}}/api/payments
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "member_id": 1, "amount": 100, "method": "Barter" }
+
+### Collect whatever one member owes — this unlocks the gate  [CHANGES DATA]
+POST {{host}}/api/payments/1/collect
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "method": "UPI" }
+
+### Clear every outstanding balance in the gym  [CHANGES DATA]
+POST {{host}}/api/payments/collect-all
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "method": "Cash" }
+
+### Delete a mis-keyed payment  [CHANGES DATA]
+DELETE {{host}}/api/payments/99999
+Authorization: Bearer {{staff}}

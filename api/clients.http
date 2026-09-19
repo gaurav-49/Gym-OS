@@ -1,0 +1,219 @@
+###############################################################################
+#  MEMBERS — the member record and its whole lifecycle
+#  /api/clients
+#
+#  Join, renew, upgrade, freeze, resume, cancel, renumber, enrol a fingerprint.
+#  A referral code given at joining is checked BEFORE the member is created, so
+#  a bad code never leaves a half-made member behind.
+#
+#  Row ids in these samples are placeholders — take a real one from the
+#  list request above it, or from the variable it captures.
+#  Send the sign-in block first — it sets the token every request below uses.
+#  Bodies work as-is against the demo data from db/seed-demo.js.
+#  [CHANGES DATA] marks anything that writes.
+###############################################################################
+
+@host = http://localhost:8080
+@json = Content-Type: application/json
+
+### Sign in as staff  ← run me first
+# @name login
+POST {{host}}/api/auth/login
+{{json}}
+
+{ "username": "admin", "password": "admin123" }
+
+###
+@staff = {{login.response.body.token}}
+
+
+### List / search by name, phone or Member ID
+# @name list
+GET {{host}}/api/clients?search=Manish
+Authorization: Bearer {{staff}}
+
+###
+@memberId = {{list.response.body.$[0].id}}
+
+### The next free numeric Member ID — what the onboarding form suggests
+GET {{host}}/api/clients/next-code
+Authorization: Bearer {{staff}}
+
+### One member
+GET {{host}}/api/clients/{{memberId}}
+Authorization: Bearer {{staff}}
+
+### Their membership history — joins, renewals, freezes, upgrades
+GET {{host}}/api/clients/{{memberId}}/events
+Authorization: Bearer {{staff}}
+
+### Join a member — the full, valid shape  [CHANGES DATA]
+POST {{host}}/api/clients
+Authorization: Bearer {{staff}}
+{{json}}
+
+{
+  "member_code": "7001",
+  "name": "Sample Member",
+  "phone": "9876500011",
+  "email": "sample.member@example.com",
+  "gender": "Male",
+  "dob": "1994-03-18",
+  "address": "12, Station Road, Jehanabad",
+  "membership_type": "Quarterly",
+  "membership_start": "2026-09-06",
+  "membership_fee": 5400,
+  "amount_paid": 5400,
+  "payment_mode": "UPI",
+  "activate_fingerprint": true,
+  "card_uid": "A1B2C3D4"
+}
+
+### Join with a referral code — the referrer earns once this is paid in full  [CHANGES DATA]
+POST {{host}}/api/clients
+Authorization: Bearer {{staff}}
+{{json}}
+
+{
+  "member_code": "7002",
+  "name": "Referred Friend",
+  "phone": "9876500012",
+  "membership_type": "Monthly",
+  "membership_fee": 2000,
+  "amount_paid": 2000,
+  "referral_code": "NEHA5043"
+}
+
+### Rejected: a referral code nobody owns → 400, and no member is created
+POST {{host}}/api/clients
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "member_code": "7003", "name": "Bad Code", "phone": "9876500013",
+  "membership_fee": 2000, "amount_paid": 2000, "referral_code": "NOSUCH0001" }
+
+### Rejected: paid more than the fee → 400
+POST {{host}}/api/clients
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "member_code": "7004", "name": "Over Paid", "phone": "9876500014",
+  "membership_fee": 1000, "amount_paid": 5000 }
+
+### Rejected: letters in the phone → 400
+POST {{host}}/api/clients
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "member_code": "7005", "name": "Bad Phone", "phone": "abcdefghij",
+  "membership_fee": 1000, "amount_paid": 1000 }
+
+### Rejected: expiry before start → 400
+POST {{host}}/api/clients
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "member_code": "7006", "name": "Backwards", "phone": "9876500016",
+  "membership_start": "2026-12-01", "membership_expiry": "2026-10-01",
+  "membership_fee": 1000, "amount_paid": 1000 }
+
+### Join a member who takes a locker at the desk  [CHANGES DATA]
+# assign_locker is the toggle on the onboarding form. The locker is created if
+# the gym has not recorded it yet, the charge lands in the member's payments,
+# and a paid invoice is raised — all through the Lockers module, so the Lockers
+# page and the member's record can never tell different stories.
+POST {{host}}/api/clients
+Authorization: Bearer {{staff}}
+{{json}}
+
+{
+  "member_code": "7007",
+  "name": "Locker Member",
+  "phone": "9876500017",
+  "membership_type": "Monthly",
+  "membership_fee": 2000,
+  "amount_paid": 2000,
+  "payment_mode": "Cash",
+  "assign_locker": true,
+  "locker_number": "L-301",
+  "locker_amount": 900,
+  "locker_until": "2026-12-31"
+}
+
+### Give the locker back  [CHANGES DATA]
+PUT {{host}}/api/clients/1
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "assign_locker": false }
+
+### Rejected: an empty body → 400, naming the fields it wanted
+POST {{host}}/api/clients
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ }
+
+### Update  [CHANGES DATA]
+PUT {{host}}/api/clients/1
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "phone": "9876500099", "email": "updated@example.com" }
+
+### Renew — a banked referral reward comes off automatically  [CHANGES DATA]
+# The response carries referral_discount and referral_note; both land on the
+# payment, which is what the receipt prints.
+PUT {{host}}/api/clients/1/renew
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "membership_type": "Monthly", "membership_fee": 2000, "amount_paid": 1900, "payment_mode": "UPI" }
+
+### Upgrade to a longer plan — the unused days carry over  [CHANGES DATA]
+POST {{host}}/api/clients/1/upgrade
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "membership_type": "Yearly", "amount": 8000, "method": "Card" }
+
+### Change a Member ID — attendance rows follow it  [CHANGES DATA]
+PUT {{host}}/api/clients/1/renumber
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "member_code": "1001" }
+
+### Freeze — the gate refuses entry until it lifts  [CHANGES DATA]
+POST {{host}}/api/clients/1/freeze
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "frozen_until": "2026-10-15", "reason": "Travelling for work" }
+
+### Resume early  [CHANGES DATA]
+POST {{host}}/api/clients/1/resume
+Authorization: Bearer {{staff}}
+
+### Cancel the membership  [CHANGES DATA]
+POST {{host}}/api/clients/1/cancel
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "reason": "Moved out of town" }
+
+### Fingerprint: put the reader into enrolment  [CHANGES DATA]
+POST {{host}}/api/clients/1/fingerprint/enroll
+Authorization: Bearer {{staff}}
+
+### ...confirm the finger took  [CHANGES DATA]
+POST {{host}}/api/clients/1/fingerprint/enrolled
+Authorization: Bearer {{staff}}
+
+### ...or turn it off  [CHANGES DATA]
+POST {{host}}/api/clients/1/fingerprint/disable
+Authorization: Bearer {{staff}}
+
+### Delete  [CHANGES DATA]
+DELETE {{host}}/api/clients/9999
+Authorization: Bearer {{staff}}

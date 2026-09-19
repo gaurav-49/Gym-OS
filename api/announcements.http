@@ -1,0 +1,49 @@
+###############################################################################
+#  ANNOUNCEMENTS — what the gym tells everyone
+#  /api/announcements
+#
+#  Members read these in their portal. A pinned notice stays at the top.
+#
+#  Row ids in these samples are placeholders — take a real one from the
+#  list request above it, or from the variable it captures.
+#  Send the sign-in block first — it sets the token every request below uses.
+#  Bodies work as-is against the demo data from db/seed-demo.js.
+#  [CHANGES DATA] marks anything that writes.
+###############################################################################
+
+@host = http://localhost:8080
+@json = Content-Type: application/json
+
+### Sign in as staff  ← run me first
+# @name login
+POST {{host}}/api/auth/login
+{{json}}
+
+{ "username": "admin", "password": "admin123" }
+
+###
+@staff = {{login.response.body.token}}
+
+
+### All notices
+GET {{host}}/api/announcements
+Authorization: Bearer {{staff}}
+
+### Post one  [CHANGES DATA]
+POST {{host}}/api/announcements
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "title": "Holiday hours", "body": "The gym closes at 2pm on the 15th.",
+  "audience": "all", "pinned": true }
+
+### Update  [CHANGES DATA]
+PUT {{host}}/api/announcements/1
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "pinned": false }
+
+### Delete  [CHANGES DATA]
+DELETE {{host}}/api/announcements/99999
+Authorization: Bearer {{staff}}

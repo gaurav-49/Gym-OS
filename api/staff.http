@@ -1,0 +1,86 @@
+###############################################################################
+#  STAFF — employment, attendance, shifts and payroll
+#  /api/staff
+#
+#  Payroll is generated from the salary on the employment record plus whatever
+#  commission the trainer has earned and not yet been paid.
+#
+#  Row ids in these samples are placeholders — take a real one from the
+#  list request above it, or from the variable it captures.
+#  Send the sign-in block first — it sets the token every request below uses.
+#  Bodies work as-is against the demo data from db/seed-demo.js.
+#  [CHANGES DATA] marks anything that writes.
+###############################################################################
+
+@host = http://localhost:8080
+@json = Content-Type: application/json
+
+### Sign in as staff  ← run me first
+# @name login
+POST {{host}}/api/auth/login
+{{json}}
+
+{ "username": "admin", "password": "admin123" }
+
+###
+@staff = {{login.response.body.token}}
+
+
+### The team
+GET {{host}}/api/staff
+Authorization: Bearer {{staff}}
+
+### Salary and commission for one of them  [CHANGES DATA]
+PUT {{host}}/api/staff/2/employment
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "monthly_salary": 28000, "commission_percent": 12, "joined_on": "2024-04-01" }
+
+### Who clocked in
+GET {{host}}/api/staff/attendance
+Authorization: Bearer {{staff}}
+
+### Clock someone in  [CHANGES DATA]
+POST {{host}}/api/staff/attendance
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "user_id": 2, "status": "Present" }
+
+### Remove a wrong entry  [CHANGES DATA]
+DELETE {{host}}/api/staff/attendance/99999
+Authorization: Bearer {{staff}}
+
+### The rota
+GET {{host}}/api/staff/shifts
+Authorization: Bearer {{staff}}
+
+### Add a shift  [CHANGES DATA]
+POST {{host}}/api/staff/shifts
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "user_id": 2, "shift_date": "2026-09-08", "start_time": "06:00", "end_time": "14:00" }
+
+### Drop a shift  [CHANGES DATA]
+DELETE {{host}}/api/staff/shifts/99999
+Authorization: Bearer {{staff}}
+
+### Payroll
+GET {{host}}/api/staff/payroll
+Authorization: Bearer {{staff}}
+
+### Run it for a month — salary plus unpaid commission  [CHANGES DATA]
+POST {{host}}/api/staff/payroll/generate
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "month": "2026-09" }
+
+### Mark one payslip paid  [CHANGES DATA]
+PUT {{host}}/api/staff/payroll/1
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "status": "paid", "paid_on": "2026-09-30" }

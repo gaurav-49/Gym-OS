@@ -1,0 +1,56 @@
+###############################################################################
+#  NOTIFICATIONS — expiry reminders and renewal receipts
+#  /api/notifications
+#
+#  Messages go out over the gym's own name, never the vendor's: {gym} in a
+#  template is substituted from branding.
+#
+#  Row ids in these samples are placeholders — take a real one from the
+#  list request above it, or from the variable it captures.
+#  Send the sign-in block first — it sets the token every request below uses.
+#  Bodies work as-is against the demo data from db/seed-demo.js.
+#  [CHANGES DATA] marks anything that writes.
+###############################################################################
+
+@host = http://localhost:8080
+@json = Content-Type: application/json
+
+### Sign in as staff  ← run me first
+# @name login
+POST {{host}}/api/auth/login
+{{json}}
+
+{ "username": "admin", "password": "admin123" }
+
+###
+@staff = {{login.response.body.token}}
+
+
+### What is switched on
+GET {{host}}/api/notifications/settings
+Authorization: Bearer {{staff}}
+
+### Change it  [CHANGES DATA]
+PUT {{host}}/api/notifications/settings
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "expiry_reminder_enabled": true, "expiry_reminder_days": 7,
+  "expiry_reminder_channel": "both", "renewal_receipt_enabled": true,
+  "expiry_reminder_message": "Hi {name}, your {gym} membership (ID {id}) expires on {expiry}. Please renew to keep training. — {gym}" }
+
+### Who is expiring inside the window
+GET {{host}}/api/notifications/expiring?days=7
+Authorization: Bearer {{staff}}
+
+### Remind one member  [CHANGES DATA]
+POST {{host}}/api/notifications/expiry-reminder/1
+Authorization: Bearer {{staff}}
+
+### Remind everyone due  [CHANGES DATA]
+POST {{host}}/api/notifications/expiry-reminders
+Authorization: Bearer {{staff}}
+
+### What has been sent
+GET {{host}}/api/notifications/log
+Authorization: Bearer {{staff}}

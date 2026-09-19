@@ -1,0 +1,80 @@
+###############################################################################
+#  ATTENDANCE — the access gate
+#  /api/attendance
+#
+#  Unpaid dues, an expired membership, a freeze or an inactive account lock
+#  EVERY door — fingerprint, card, QR and the manual form alike. There is no
+#  instalment option in this product: unpaid is unpaid. 5024 owes 800, so every
+#  request below that names them is refused with 403.
+#
+#  Row ids in these samples are placeholders — take a real one from the
+#  list request above it, or from the variable it captures.
+#  Send the sign-in block first — it sets the token every request below uses.
+#  Bodies work as-is against the demo data from db/seed-demo.js.
+#  [CHANGES DATA] marks anything that writes.
+###############################################################################
+
+@host = http://localhost:8080
+@json = Content-Type: application/json
+
+### Sign in as staff  ← run me first
+# @name login
+POST {{host}}/api/auth/login
+{{json}}
+
+{ "username": "admin", "password": "admin123" }
+
+###
+@staff = {{login.response.body.token}}
+
+
+### Today's attendance
+GET {{host}}/api/attendance
+Authorization: Bearer {{staff}}
+
+### One member's history
+GET {{host}}/api/attendance?member_id=5050
+Authorization: Bearer {{staff}}
+
+### The monthly report
+GET {{host}}/api/attendance/report?from=2026-08-01&to=2026-09-06
+Authorization: Bearer {{staff}}
+
+### Mark someone in by hand  [CHANGES DATA]
+POST {{host}}/api/attendance/mark
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "member_id": "5050", "status": "Present" }
+
+### Refused: the manual form is gated too — 5024 owes 800 → 403
+# This one used to be the hole: the checks sat behind "was a name supplied?",
+# and the manual form is the one path that always supplies one.
+POST {{host}}/api/attendance/mark
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "member_id": "5024", "member_name": "Harsh Reddy", "status": "Present" }
+
+### Scan a member's QR at the desk  [CHANGES DATA]
+# Staff-only. A member cannot punch themselves in from their own portal — the
+# QR there is display-only.
+POST {{host}}/api/attendance/qr-punch
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "payload": "GYMOS:5050" }
+
+### Refused: the same scan for the member in arrears → 403
+POST {{host}}/api/attendance/qr-punch
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "payload": "GYMOS:5024" }
+
+### Refused: an unknown code → 404
+POST {{host}}/api/attendance/qr-punch
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "payload": "GYMOS:999999" }

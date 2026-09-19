@@ -1,0 +1,56 @@
+###############################################################################
+#  MEMBERSHIP PLANS — what the gym sells
+#  /api/plans
+#
+#  The price list behind the join and renew forms. Deactivate rather than
+#  delete once anyone has been sold one.
+#
+#  Row ids in these samples are placeholders — take a real one from the
+#  list request above it, or from the variable it captures.
+#  Send the sign-in block first — it sets the token every request below uses.
+#  Bodies work as-is against the demo data from db/seed-demo.js.
+#  [CHANGES DATA] marks anything that writes.
+###############################################################################
+
+@host = http://localhost:8080
+@json = Content-Type: application/json
+
+### Sign in as staff  ← run me first
+# @name login
+POST {{host}}/api/auth/login
+{{json}}
+
+{ "username": "admin", "password": "admin123" }
+
+###
+@staff = {{login.response.body.token}}
+
+
+### The price list
+GET {{host}}/api/plans
+Authorization: Bearer {{staff}}
+
+### Add one  [CHANGES DATA]
+POST {{host}}/api/plans
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "name": "Sample 45-Day", "duration_days": 45, "price": 2800 }
+
+### Rejected: a plan that runs for no days → 400
+POST {{host}}/api/plans
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "name": "Zero", "duration_days": 0, "price": 500 }
+
+### Reprice  [CHANGES DATA]
+PUT {{host}}/api/plans/1
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "price": 3000, "is_active": true }
+
+### Delete  [CHANGES DATA]
+DELETE {{host}}/api/plans/99999
+Authorization: Bearer {{staff}}

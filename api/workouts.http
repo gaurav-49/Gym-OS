@@ -1,0 +1,57 @@
+###############################################################################
+#  WORKOUT PLANS — what the trainer sets
+#  /api/workouts
+#
+#  One row per exercise per day, which is what the member's Workouts tab
+#  groups and shows.
+#
+#  Row ids in these samples are placeholders — take a real one from the
+#  list request above it, or from the variable it captures.
+#  Send the sign-in block first — it sets the token every request below uses.
+#  Bodies work as-is against the demo data from db/seed-demo.js.
+#  [CHANGES DATA] marks anything that writes.
+###############################################################################
+
+@host = http://localhost:8080
+@json = Content-Type: application/json
+
+### Sign in as staff  ← run me first
+# @name login
+POST {{host}}/api/auth/login
+{{json}}
+
+{ "username": "admin", "password": "admin123" }
+
+###
+@staff = {{login.response.body.token}}
+
+
+### A member's plan
+GET {{host}}/api/workouts?member_id=1
+Authorization: Bearer {{staff}}
+
+### Add an exercise  [CHANGES DATA]
+POST {{host}}/api/workouts
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "member_id": 1, "day_of_week": "Monday", "exercise": "Bench Press",
+  "sets": 4, "reps": "8-10", "notes": "Two-minute rest between sets" }
+
+### Rejected: no exercise named → 400
+POST {{host}}/api/workouts
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "member_id": 1, "day_of_week": "Monday" }
+
+### Update  [CHANGES DATA]
+PUT {{host}}/api/workouts/1
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "sets": 5, "reps": "6-8" }
+
+### Delete  [CHANGES DATA]
+DELETE {{host}}/api/workouts/99999
+Authorization: Bearer {{staff}}

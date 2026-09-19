@@ -1,0 +1,59 @@
+###############################################################################
+#  ASSESSMENTS — body composition on a date
+#  /api/assessments
+#
+#  A fuller measurement than the progress chart: composition, resting heart
+#  rate, the trainer's remarks.
+#
+#  Row ids in these samples are placeholders — take a real one from the
+#  list request above it, or from the variable it captures.
+#  Send the sign-in block first — it sets the token every request below uses.
+#  Bodies work as-is against the demo data from db/seed-demo.js.
+#  [CHANGES DATA] marks anything that writes.
+###############################################################################
+
+@host = http://localhost:8080
+@json = Content-Type: application/json
+
+### Sign in as staff  ← run me first
+# @name login
+POST {{host}}/api/auth/login
+{{json}}
+
+{ "username": "admin", "password": "admin123" }
+
+###
+@staff = {{login.response.body.token}}
+
+
+### All assessments
+# @name list
+GET {{host}}/api/assessments
+Authorization: Bearer {{staff}}
+
+###
+@memberId = {{list.response.body.$[0].member_id}}
+
+### One member's
+GET {{host}}/api/assessments/member/{{memberId}}
+Authorization: Bearer {{staff}}
+
+### Record one  [CHANGES DATA]
+POST {{host}}/api/assessments
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "member_id": 1, "assessed_on": "2026-09-06", "weight": 74.5, "body_fat": 19.2,
+  "muscle_mass": 33.4, "bmi": 24.1, "resting_heart_rate": 62,
+  "notes": "Down 2kg since July; strength up across the board" }
+
+### Update  [CHANGES DATA]
+PUT {{host}}/api/assessments/1
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "notes": "Re-measured on better scales" }
+
+### Delete  [CHANGES DATA]
+DELETE {{host}}/api/assessments/99999
+Authorization: Bearer {{staff}}

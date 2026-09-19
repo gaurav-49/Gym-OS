@@ -1,0 +1,49 @@
+###############################################################################
+#  COUNTER SALES — retail off the shelf
+#  /api/product-sales
+#
+#  A sale takes the stock down and the money into the ledger in one step.
+#  Deleting one puts the stock back.
+#
+#  Row ids in these samples are placeholders — take a real one from the
+#  list request above it, or from the variable it captures.
+#  Send the sign-in block first — it sets the token every request below uses.
+#  Bodies work as-is against the demo data from db/seed-demo.js.
+#  [CHANGES DATA] marks anything that writes.
+###############################################################################
+
+@host = http://localhost:8080
+@json = Content-Type: application/json
+
+### Sign in as staff  ← run me first
+# @name login
+POST {{host}}/api/auth/login
+{{json}}
+
+{ "username": "admin", "password": "admin123" }
+
+###
+@staff = {{login.response.body.token}}
+
+
+### What has sold
+GET {{host}}/api/product-sales
+Authorization: Bearer {{staff}}
+
+### Sell one over the counter  [CHANGES DATA]
+POST {{host}}/api/product-sales
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "product_id": 1, "quantity": 1, "member_id": 1, "method": "UPI" }
+
+### Rejected: more than the shelf holds → 400
+POST {{host}}/api/product-sales
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "product_id": 1, "quantity": 9999, "method": "Cash" }
+
+### Reverse a sale — the stock goes back  [CHANGES DATA]
+DELETE {{host}}/api/product-sales/99999
+Authorization: Bearer {{staff}}

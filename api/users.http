@@ -1,0 +1,65 @@
+###############################################################################
+#  USERS — staff and trainer accounts (admin only)
+#  /api/users
+#
+#  Usernames allow letters, digits, dot and underscore only, and are stored in
+#  lower case. Roles: admin, staff, trainer.
+#
+#  Row ids in these samples are placeholders — take a real one from the
+#  list request above it, or from the variable it captures.
+#  Send the sign-in block first — it sets the token every request below uses.
+#  Bodies work as-is against the demo data from db/seed-demo.js.
+#  [CHANGES DATA] marks anything that writes.
+###############################################################################
+
+@host = http://localhost:8080
+@json = Content-Type: application/json
+
+### Sign in as staff  ← run me first
+# @name login
+POST {{host}}/api/auth/login
+{{json}}
+
+{ "username": "admin", "password": "admin123" }
+
+###
+@staff = {{login.response.body.token}}
+
+
+### Every account
+GET {{host}}/api/users
+Authorization: Bearer {{staff}}
+
+### Create a trainer  [CHANGES DATA]
+POST {{host}}/api/users
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "username": "coach.sample", "password": "trainer123", "name": "Sample Coach",
+  "role": "trainer", "email": "sample.coach@goldsgym.local", "phone": "9810000009",
+  "monthly_salary": 25000, "commission_percent": 10 }
+
+### Rejected: spaces and symbols in a username → 400
+POST {{host}}/api/users
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "username": "bad user!", "password": "trainer123", "name": "Bad", "role": "trainer" }
+
+### Rejected: a password under six characters → 400
+POST {{host}}/api/users
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "username": "shorty", "password": "abc", "name": "Short", "role": "trainer" }
+
+### Update one  [CHANGES DATA]
+PUT {{host}}/api/users/2
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "name": "Rahul Verma", "phone": "9810000001", "commission_percent": 12 }
+
+### Delete one  [CHANGES DATA]
+DELETE {{host}}/api/users/99
+Authorization: Bearer {{staff}}

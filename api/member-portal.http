@@ -1,0 +1,77 @@
+###############################################################################
+#  MEMBER PORTAL — the member's own sign-in and page
+#  /api/member
+#
+#  Every member starts on the password "admin" and is nagged to change it. An
+#  expired membership cannot sign in at all — the message names the date.
+#
+#  Row ids in these samples are placeholders — take a real one from the
+#  list request above it, or from the variable it captures.
+#  Send the sign-in block first — it sets the token every request below uses.
+#  Bodies work as-is against the demo data from db/seed-demo.js.
+#  [CHANGES DATA] marks anything that writes.
+###############################################################################
+
+@host = http://localhost:8080
+@json = Content-Type: application/json
+
+### Sign in with a Member ID  ← run me first
+# @name memberLogin
+POST {{host}}/api/member/login
+{{json}}
+
+{ "member_code": "5050", "password": "admin" }
+
+###
+@member = {{memberLogin.response.body.token}}
+
+### Rejected: an expired membership cannot sign in → 403
+# 5024 expired on 27 Aug 2026 and owes 800.
+POST {{host}}/api/member/login
+{{json}}
+
+{ "member_code": "5024", "password": "admin" }
+
+### Everything the portal shows — plan, dues, payments, PT, referrals, QR
+GET {{host}}/api/member/me
+Authorization: Bearer {{member}}
+
+### Change the password  [CHANGES DATA]
+POST {{host}}/api/member/change-password
+Authorization: Bearer {{member}}
+{{json}}
+
+{ "current_password": "admin", "new_password": "MyGym#2026" }
+
+### Rejected: the gym default cannot be chosen as a new password → 400
+POST {{host}}/api/member/change-password
+Authorization: Bearer {{member}}
+{{json}}
+
+{ "current_password": "admin", "new_password": "admin" }
+
+### Forgotten it — where a code can be sent, masked
+GET {{host}}/api/member/recovery-options?member_code=5050
+
+### Send the code  [CHANGES DATA]
+POST {{host}}/api/member/forgot
+{{json}}
+
+{ "member_code": "5050", "method": "email" }
+
+### Spend it and set a new password  [CHANGES DATA]
+POST {{host}}/api/member/verify-otp
+{{json}}
+
+{ "member_code": "5050", "otp": "123456", "new_password": "MyGym#2026" }
+
+### The gym's announcements, as the member sees them
+GET {{host}}/api/member/announcements
+Authorization: Bearer {{member}}
+
+### Leave feedback  [CHANGES DATA]
+POST {{host}}/api/member/feedback
+Authorization: Bearer {{member}}
+{{json}}
+
+{ "rating": 5, "comment": "The new equipment is excellent." }

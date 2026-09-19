@@ -1,0 +1,60 @@
+###############################################################################
+#  BILLING — auto-renewal and dunning
+#  /api/billing
+#
+#  A saved method renews a membership on expiry. A failed charge is retried on
+#  a ladder and the member is paused after the last attempt.
+#
+#  Row ids in these samples are placeholders — take a real one from the
+#  list request above it, or from the variable it captures.
+#  Send the sign-in block first — it sets the token every request below uses.
+#  Bodies work as-is against the demo data from db/seed-demo.js.
+#  [CHANGES DATA] marks anything that writes.
+###############################################################################
+
+@host = http://localhost:8080
+@json = Content-Type: application/json
+
+### Sign in as staff  ← run me first
+# @name login
+POST {{host}}/api/auth/login
+{{json}}
+
+{ "username": "admin", "password": "admin123" }
+
+###
+@staff = {{login.response.body.token}}
+
+
+### Who renews, who failed, what is owed
+GET {{host}}/api/billing/overview
+Authorization: Bearer {{staff}}
+
+### Gym-wide settings  [CHANGES DATA]
+PUT {{host}}/api/billing/settings
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "auto_renew_enabled": true, "max_attempts": 3, "retry_after_days": 2 }
+
+### Put one member on auto-renew  [CHANGES DATA]
+PUT {{host}}/api/billing/members/1
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "auto_renew": true, "recurring_method": "UPI" }
+
+### Force the charge now  [CHANGES DATA]
+POST {{host}}/api/billing/members/1/retry
+Authorization: Bearer {{staff}}
+
+### Took the money at the desk instead  [CHANGES DATA]
+POST {{host}}/api/billing/members/1/mark-paid
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "amount": 2000, "method": "Cash" }
+
+### Stop trying  [CHANGES DATA]
+POST {{host}}/api/billing/members/1/pause
+Authorization: Bearer {{staff}}

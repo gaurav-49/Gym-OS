@@ -1,0 +1,54 @@
+###############################################################################
+#  TASKS — the staff follow-up queue
+#  /api/tasks
+#
+#  Ring this member back, chase that renewal. The counts endpoint feeds the
+#  badge in the sidebar.
+#
+#  Row ids in these samples are placeholders — take a real one from the
+#  list request above it, or from the variable it captures.
+#  Send the sign-in block first — it sets the token every request below uses.
+#  Bodies work as-is against the demo data from db/seed-demo.js.
+#  [CHANGES DATA] marks anything that writes.
+###############################################################################
+
+@host = http://localhost:8080
+@json = Content-Type: application/json
+
+### Sign in as staff  ← run me first
+# @name login
+POST {{host}}/api/auth/login
+{{json}}
+
+{ "username": "admin", "password": "admin123" }
+
+###
+@staff = {{login.response.body.token}}
+
+
+### The queue
+GET {{host}}/api/tasks
+Authorization: Bearer {{staff}}
+
+### Open / due / overdue counts
+GET {{host}}/api/tasks/counts
+Authorization: Bearer {{staff}}
+
+### Add one  [CHANGES DATA]
+POST {{host}}/api/tasks
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "title": "Call about renewal", "member_id": 1, "assigned_to": 2,
+  "due_date": "2026-09-10", "priority": "high" }
+
+### Close it  [CHANGES DATA]
+PUT {{host}}/api/tasks/1
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "status": "done" }
+
+### Delete  [CHANGES DATA]
+DELETE {{host}}/api/tasks/99999
+Authorization: Bearer {{staff}}

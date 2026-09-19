@@ -1,0 +1,80 @@
+###############################################################################
+#  LEADS — enquiries that have not joined yet
+#  /api/leads
+#
+#  Convert turns a lead into a member in one step, carrying the name and phone
+#  across so nobody retypes them.
+#
+#  Row ids in these samples are placeholders — take a real one from the
+#  list request above it, or from the variable it captures.
+#  Send the sign-in block first — it sets the token every request below uses.
+#  Bodies work as-is against the demo data from db/seed-demo.js.
+#  [CHANGES DATA] marks anything that writes.
+###############################################################################
+
+@host = http://localhost:8080
+@json = Content-Type: application/json
+
+### Sign in as staff  ← run me first
+# @name login
+POST {{host}}/api/auth/login
+{{json}}
+
+{ "username": "admin", "password": "admin123" }
+
+###
+@staff = {{login.response.body.token}}
+
+
+### The pipeline
+GET {{host}}/api/leads
+Authorization: Bearer {{staff}}
+
+### Log an enquiry  [CHANGES DATA]
+POST {{host}}/api/leads
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "name": "Walk-in Enquiry", "phone": "9876500031", "interest": "Quarterly",
+  "source": "walk-in", "notes": "Wants to start next Monday" }
+
+### Move it along  [CHANGES DATA]
+PUT {{host}}/api/leads/1
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "status": "trial", "follow_up_date": "2026-09-10" }
+
+### Convert — the member already exists  [CHANGES DATA]
+# What the desk sends: it filled in the onboarding form, the member was
+# created there, and this only closes the enquiry.
+POST {{host}}/api/leads/1/convert
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "member_id": 1 }
+
+### Convert — onboard in one call  [CHANGES DATA]
+# For an API client with no form to fill. The body goes through the same
+# onboarding rules as any walk-in, so it needs everything a member needs; the
+# lead only supplies the name, phone, email and the plan they asked about.
+POST {{host}}/api/leads/1/convert
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "member_code": "7010", "membership_type": "Monthly", "membership_fee": 2000,
+  "amount_paid": 2000, "payment_mode": "Cash", "address": "12, Station Road, Jehanabad",
+  "gender": "Male", "dob": "1994-03-18" }
+
+### Rejected: converting on the lead's details alone → 400
+# A lead holds a name and usually a phone. A member needs rather more, and
+# used to be created from exactly that much.
+POST {{host}}/api/leads/1/convert
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ }
+
+### Delete  [CHANGES DATA]
+DELETE {{host}}/api/leads/99999
+Authorization: Bearer {{staff}}

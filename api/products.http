@@ -1,0 +1,64 @@
+###############################################################################
+#  RETAIL STOCK — what the counter sells
+#  /api/products
+#
+#  Stock is decremented by a sale and topped up by a restock, so the shelf
+#  count in the app is the shelf count in the shop.
+#
+#  Row ids in these samples are placeholders — take a real one from the
+#  list request above it, or from the variable it captures.
+#  Send the sign-in block first — it sets the token every request below uses.
+#  Bodies work as-is against the demo data from db/seed-demo.js.
+#  [CHANGES DATA] marks anything that writes.
+###############################################################################
+
+@host = http://localhost:8080
+@json = Content-Type: application/json
+
+### Sign in as staff  ← run me first
+# @name login
+POST {{host}}/api/auth/login
+{{json}}
+
+{ "username": "admin", "password": "admin123" }
+
+###
+@staff = {{login.response.body.token}}
+
+
+### The shelf
+GET {{host}}/api/products
+Authorization: Bearer {{staff}}
+
+### Add a line  [CHANGES DATA]
+POST {{host}}/api/products
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "name": "Sample Whey 1kg", "category": "Supplement", "cost_price": 1800,
+  "sale_price": 2400, "tax_rate": 18, "stock_qty": 25, "reorder_level": 5 }
+
+### Rejected: an empty form → 400
+POST {{host}}/api/products
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ }
+
+### Update  [CHANGES DATA]
+PUT {{host}}/api/products/1
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "sale_price": 2500, "reorder_level": 8 }
+
+### Restock  [CHANGES DATA]
+POST {{host}}/api/products/1/restock
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "quantity": 20 }
+
+### Delete  [CHANGES DATA]
+DELETE {{host}}/api/products/99999
+Authorization: Bearer {{staff}}

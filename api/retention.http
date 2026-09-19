@@ -1,0 +1,39 @@
+###############################################################################
+#  RETENTION — who is drifting away
+#  /api/retention
+#
+#  Scores every active member on how their visits are trending and sorts them
+#  into at-risk, watch and healthy, so the desk knows who to ring.
+#
+#  Row ids in these samples are placeholders — take a real one from the
+#  list request above it, or from the variable it captures.
+#  Send the sign-in block first — it sets the token every request below uses.
+#  Bodies work as-is against the demo data from db/seed-demo.js.
+#  [CHANGES DATA] marks anything that writes.
+###############################################################################
+
+@host = http://localhost:8080
+@json = Content-Type: application/json
+
+### Sign in as staff  ← run me first
+# @name login
+POST {{host}}/api/auth/login
+{{json}}
+
+{ "username": "admin", "password": "admin123" }
+
+###
+@staff = {{login.response.body.token}}
+
+
+### The three bands
+GET {{host}}/api/retention/summary
+Authorization: Bearer {{staff}}
+
+### The call list
+GET {{host}}/api/retention/at-risk
+Authorization: Bearer {{staff}}
+
+### Rescore everyone now  [CHANGES DATA]
+POST {{host}}/api/retention/recompute
+Authorization: Bearer {{staff}}

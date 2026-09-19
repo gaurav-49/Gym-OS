@@ -1,0 +1,61 @@
+###############################################################################
+#  EXPENSES — the other half of the ledger
+#  /api/expenses
+#
+#  Payments were income only; expenses are what makes a profit and loss
+#  possible at all.
+#
+#  Row ids in these samples are placeholders — take a real one from the
+#  list request above it, or from the variable it captures.
+#  Send the sign-in block first — it sets the token every request below uses.
+#  Bodies work as-is against the demo data from db/seed-demo.js.
+#  [CHANGES DATA] marks anything that writes.
+###############################################################################
+
+@host = http://localhost:8080
+@json = Content-Type: application/json
+
+### Sign in as staff  ← run me first
+# @name login
+POST {{host}}/api/auth/login
+{{json}}
+
+{ "username": "admin", "password": "admin123" }
+
+###
+@staff = {{login.response.body.token}}
+
+
+### What the gym has spent
+GET {{host}}/api/expenses
+Authorization: Bearer {{staff}}
+
+### ...over a period
+GET {{host}}/api/expenses?from=2026-09-01&to=2026-09-30
+Authorization: Bearer {{staff}}
+
+### Record one  [CHANGES DATA]
+POST {{host}}/api/expenses
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "category": "Utilities", "description": "Electricity — September", "amount": 18500,
+  "expense_date": "2026-09-05", "method": "Bank Transfer", "vendor": "State Electricity Board" }
+
+### Rejected: an expense with no amount → 400
+POST {{host}}/api/expenses
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "category": "Utilities" }
+
+### Update  [CHANGES DATA]
+PUT {{host}}/api/expenses/1
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "amount": 19000, "notes": "Revised bill" }
+
+### Delete  [CHANGES DATA]
+DELETE {{host}}/api/expenses/99999
+Authorization: Bearer {{staff}}

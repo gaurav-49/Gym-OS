@@ -1,0 +1,78 @@
+###############################################################################
+#  LOCKERS — allocation and rent
+#  /api/lockers
+#
+#  A locker is assigned to a member until it is released. Assigning an occupied
+#  one is refused rather than silently reassigned.
+#
+#  Row ids in these samples are placeholders — take a real one from the
+#  list request above it, or from the variable it captures.
+#  Send the sign-in block first — it sets the token every request below uses.
+#  Bodies work as-is against the demo data from db/seed-demo.js.
+#  [CHANGES DATA] marks anything that writes.
+###############################################################################
+
+@host = http://localhost:8080
+@json = Content-Type: application/json
+
+### Sign in as staff  ← run me first
+# @name login
+POST {{host}}/api/auth/login
+{{json}}
+
+{ "username": "admin", "password": "admin123" }
+
+###
+@staff = {{login.response.body.token}}
+
+
+### The bank of lockers
+GET {{host}}/api/lockers
+Authorization: Bearer {{staff}}
+
+### Add one  [CHANGES DATA]
+POST {{host}}/api/lockers
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "locker_number": "L-101", "size": "Medium", "monthly_rent": 300 }
+
+### Assign it, and take the rent  [CHANGES DATA]
+# The charge is optional. When it is there the rent lands in the member's
+# payments and a paid invoice is raised — the same thing the onboarding form
+# does when the desk ticks "assign a locker", because it is the same code.
+POST {{host}}/api/lockers/1/assign
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "member_id": 1, "months": 3, "amount": 900, "method": "UPI" }
+
+### ...or assign it with nothing to pay  [CHANGES DATA]
+# For a gym that includes a locker in the membership.
+POST {{host}}/api/lockers/1/assign
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "member_id": 1, "assigned_until": "2026-12-31" }
+
+### Rejected: a member may hold only one locker → 409
+POST {{host}}/api/lockers/2/assign
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "member_id": 1 }
+
+### Release it  [CHANGES DATA]
+POST {{host}}/api/lockers/1/release
+Authorization: Bearer {{staff}}
+
+### Update  [CHANGES DATA]
+PUT {{host}}/api/lockers/1
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "monthly_rent": 350 }
+
+### Delete  [CHANGES DATA]
+DELETE {{host}}/api/lockers/99999
+Authorization: Bearer {{staff}}

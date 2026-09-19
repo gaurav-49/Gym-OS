@@ -1,0 +1,64 @@
+###############################################################################
+#  AUTH — staff sign-in and password recovery
+#  /api/auth
+#
+#  Usernames are folded to lower case and matched case-insensitively; passwords
+#  are not. Five wrong attempts inside 15 minutes lock the account.
+#
+#  Row ids in these samples are placeholders — take a real one from the
+#  list request above it, or from the variable it captures.
+#  Send the sign-in block first — it sets the token every request below uses.
+#  Bodies work as-is against the demo data from db/seed-demo.js.
+#  [CHANGES DATA] marks anything that writes.
+###############################################################################
+
+@host = http://localhost:8080
+@json = Content-Type: application/json
+
+### Sign in. Usernames are case-insensitive; passwords are not.
+# @name login
+POST {{host}}/api/auth/login
+{{json}}
+
+{ "username": "ADMIN", "password": "admin123" }
+
+###
+@staff = {{login.response.body.token}}
+
+### The same account in any capitalisation still works
+POST {{host}}/api/auth/login
+{{json}}
+
+{ "username": "AdMiN", "password": "admin123" }
+
+### Rejected: the password IS case-sensitive → 401
+POST {{host}}/api/auth/login
+{{json}}
+
+{ "username": "admin", "password": "ADMIN123" }
+
+### Rejected: an unknown username says so, rather than blaming the password → 401
+POST {{host}}/api/auth/login
+{{json}}
+
+{ "username": "nobody.here", "password": "admin123" }
+
+### Who am I
+GET {{host}}/api/auth/me
+Authorization: Bearer {{staff}}
+
+### Where a reset code can be sent, masked so it leaks nothing
+GET {{host}}/api/auth/recovery-options/admin
+
+### Send a reset OTP  [CHANGES DATA]
+POST {{host}}/api/auth/forgot
+{{json}}
+
+{ "username": "admin", "method": "email" }
+
+### Spend the OTP and set a new password  [CHANGES DATA]
+# In dev the OTP is printed to the server console and returned as dev_otp.
+POST {{host}}/api/auth/verify-otp
+{{json}}
+
+{ "username": "admin", "otp": "123456", "new_password": "NewPass#2026" }

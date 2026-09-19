@@ -1,0 +1,40 @@
+###############################################################################
+#  FIELD RULES — the shared validation catalogue
+#  /api/exceptions, /api/field-rules
+#
+#  Both apps read their mandatory-field rules and error wording from here, so
+#  a rule changes in one place rather than in every form.
+#  /api/field-rules is the older name for the same data.
+#
+#  Row ids in these samples are placeholders — take a real one from the
+#  list request above it, or from the variable it captures.
+#  Send the sign-in block first — it sets the token every request below uses.
+#  Bodies work as-is against the demo data from db/seed-demo.js.
+#  [CHANGES DATA] marks anything that writes.
+###############################################################################
+
+@host = http://localhost:8080
+@json = Content-Type: application/json
+
+### Sign in as staff  ← run me first
+# @name login
+POST {{host}}/api/auth/login
+{{json}}
+
+{ "username": "admin", "password": "admin123" }
+
+###
+@staff = {{login.response.body.token}}
+
+
+### Every rule
+GET {{host}}/api/exceptions
+Authorization: Bearer {{staff}}
+
+### Just one module's
+GET {{host}}/api/exceptions?module=members
+Authorization: Bearer {{staff}}
+
+### The legacy alias, same data
+GET {{host}}/api/field-rules?module=members
+Authorization: Bearer {{staff}}

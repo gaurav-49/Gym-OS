@@ -1,0 +1,31 @@
+###############################################################################
+#  DASHBOARD — the front-desk summary
+#  /api/dashboard
+#
+#  One call behind the home screen: headcount, today's attendance and takings,
+#  who is expiring, and the recent activity feed.
+#
+#  Row ids in these samples are placeholders — take a real one from the
+#  list request above it, or from the variable it captures.
+#  Send the sign-in block first — it sets the token every request below uses.
+#  Bodies work as-is against the demo data from db/seed-demo.js.
+#  [CHANGES DATA] marks anything that writes.
+###############################################################################
+
+@host = http://localhost:8080
+@json = Content-Type: application/json
+
+### Sign in as staff  ← run me first
+# @name login
+POST {{host}}/api/auth/login
+{{json}}
+
+{ "username": "admin", "password": "admin123" }
+
+###
+@staff = {{login.response.body.token}}
+
+
+### Everything the dashboard shows
+GET {{host}}/api/dashboard/stats
+Authorization: Bearer {{staff}}

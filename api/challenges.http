@@ -1,0 +1,81 @@
+###############################################################################
+#  CHALLENGES — gym-wide competitions
+#  /api/challenges
+#
+#  A challenge has a metric and a window; members join and their progress is
+#  refreshed from attendance or measurements to build the leaderboard.
+#
+#  Row ids in these samples are placeholders — take a real one from the
+#  list request above it, or from the variable it captures.
+#  Send the sign-in block first — it sets the token every request below uses.
+#  Bodies work as-is against the demo data from db/seed-demo.js.
+#  [CHANGES DATA] marks anything that writes.
+###############################################################################
+
+@host = http://localhost:8080
+@json = Content-Type: application/json
+
+### Sign in as staff  ← run me first
+# @name login
+POST {{host}}/api/auth/login
+{{json}}
+
+{ "username": "admin", "password": "admin123" }
+
+###
+@staff = {{login.response.body.token}}
+
+
+### All challenges
+# @name list
+GET {{host}}/api/challenges
+Authorization: Bearer {{staff}}
+
+###
+@challengeId = {{list.response.body.$[0].id}}
+
+### One, with its leaderboard
+GET {{host}}/api/challenges/{{challengeId}}
+Authorization: Bearer {{staff}}
+
+### Start one  [CHANGES DATA]
+POST {{host}}/api/challenges
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "name": "September Streak", "metric": "attendance", "target": 20,
+  "start_date": "2026-09-01", "end_date": "2026-09-30",
+  "description": "Twenty visits in September" }
+
+### Update  [CHANGES DATA]
+PUT {{host}}/api/challenges/1
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "target": 22 }
+
+### Enter a member  [CHANGES DATA]
+POST {{host}}/api/challenges/1/join
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "member_id": 1 }
+
+### Recompute the leaderboard  [CHANGES DATA]
+POST {{host}}/api/challenges/1/refresh
+Authorization: Bearer {{staff}}
+
+### Override one member's progress  [CHANGES DATA]
+PUT {{host}}/api/challenges/1/participants/1/progress
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "progress": 12 }
+
+### Withdraw a member  [CHANGES DATA]
+DELETE {{host}}/api/challenges/1/participants/1
+Authorization: Bearer {{staff}}
+
+### Delete the challenge  [CHANGES DATA]
+DELETE {{host}}/api/challenges/99999
+Authorization: Bearer {{staff}}

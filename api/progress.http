@@ -1,0 +1,50 @@
+###############################################################################
+#  PROGRESS — body measurements over time
+#  /api/progress
+#
+#  The member's chart. Weights outside a human range are refused: a typo of
+#  900kg would flatten every other point on it.
+#
+#  Row ids in these samples are placeholders — take a real one from the
+#  list request above it, or from the variable it captures.
+#  Send the sign-in block first — it sets the token every request below uses.
+#  Bodies work as-is against the demo data from db/seed-demo.js.
+#  [CHANGES DATA] marks anything that writes.
+###############################################################################
+
+@host = http://localhost:8080
+@json = Content-Type: application/json
+
+### Sign in as staff  ← run me first
+# @name login
+POST {{host}}/api/auth/login
+{{json}}
+
+{ "username": "admin", "password": "admin123" }
+
+###
+@staff = {{login.response.body.token}}
+
+
+### One member's records
+GET {{host}}/api/progress?member_id=1
+Authorization: Bearer {{staff}}
+
+### Record a measurement  [CHANGES DATA]
+POST {{host}}/api/progress
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "member_id": 1, "record_date": "2026-09-06", "weight": 74.5, "body_fat": 19.2,
+  "chest": 98, "waist": 84, "arms": 35, "thighs": 57, "shoulders": 114 }
+
+### Rejected: a weight nobody has → 400
+POST {{host}}/api/progress
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "member_id": 1, "record_date": "2026-09-06", "weight": 900 }
+
+### Delete  [CHANGES DATA]
+DELETE {{host}}/api/progress/99999
+Authorization: Bearer {{staff}}

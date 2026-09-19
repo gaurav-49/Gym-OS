@@ -1,0 +1,103 @@
+# GYM OS backend — Spring Boot 4 configuration.
+#
+# Values mirror the Node backend's backend/.env (same names, same fallbacks),
+# so the same environment works for both servers. Defaults match the local dev
+# setup (gauravsharma / gymdb on localhost:5432).
+
+server:
+  # 8080 is the port the whole product documents and is run on: the READMEs,
+  # every api/*.http sample and the Vite dev proxy all point here. The old
+  # 3000 default came from 1.0, where this had to match the Express server's
+  # PORT in backend/.env -- a file 2.0 does not have. Override with SERVER_PORT.
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: gym-os-backend
+  datasource:
+    # stringtype=unspecified mirrors the Node pg driver: strings are sent as
+    # text and Postgres infers the target type, so date/time literals bind to
+    # DATE/TIME columns exactly like the Node backend.
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:gymdb}?stringtype=unspecified
+    username: ${DB_USER:gauravsharma}
+    password: ${DB_PASSWORD:}
+    hikari:
+      maximum-pool-size: 10
+
+app:
+  jwt:
+    # No shared default. A published fallback secret means anyone who reads the
+    # source can mint an admin token, so an unset JWT_SECRET now gets a random
+    # per-process secret (dev) or refuses to start (production) — see JwtService.
+    secret: ${JWT_SECRET:}
+    expiry-days: 7
+  login:
+    # Failed-login handling for /api/auth/login, /api/member/login and
+    # /api/member/classes/verify. There is no timed lockout: a staff account
+    # that spends its allowance is flagged for a password reset instead (which
+    # blocks guessing outright and lets the owner back in immediately), and a
+    # member — who has no password to reset — simply gets slow replies.
+    max-failed-attempts: 5    # per username / member code
+    max-failed-per-ip: 20     # per source address, across all usernames
+    penalty-delay-ms: 1500    # how slowly to answer once the allowance is spent
+    decay-minutes: 15         # a quiet gap this long resets the counter
+  member:
+    # The password every member's portal account starts on, so the desk can
+    # hand over a Member ID and the member is in immediately. It is public by
+    # design — the portal is read-only apart from class bookings, and marking
+    # attendance is not something a member can do at all. A gym that would
+    # rather not run an open default can set MEMBER_DEFAULT_PASSWORD, but must
+    # then change the hash seeded by db/migrate.js to match.
+    default-password: ${MEMBER_DEFAULT_PASSWORD:admin}
+  password:
+    # Minimum length, and how far back reuse is blocked. Raising history-depth
+    # costs one BCrypt comparison per remembered password on each change.
+    min-length: 6
+    history-depth: 5
+  otp:
+    ttl-minutes: 10
+    max-sends-per-hour: 5
+    # Resend ladder: "sends-already-made = seconds to wait before the next one".
+    # The wait applied is the highest threshold reached, so the first couple of
+    # resends cost a minute and someone hammering the endpoint quickly finds it
+    # costing hours. Counted over a rolling 24 hours, and reset outright once a
+    # password reset actually succeeds.
+    #   0–2 sends → 1 min   3–4 → 10 min   5–9 → 20 min   10–14 → 1 h   15+ → 24 h
+    resend-ladder: "0=60,3=600,5=1200,10=3600,15=86400"
+    max-failed-attempts: 5
+    lockout-minutes: 15
+  smtp:
+    host: ${SMTP_HOST:}
+    port: ${SMTP_PORT:587}
+    secure: ${SMTP_SECURE:false}
+    user: ${SMTP_USER:}
+    pass: ${SMTP_PASS:}
+    from: ${MAIL_FROM:}
+  twilio:
+    sid: ${SMS_TWILIO_SID:}
+    token: ${SMS_TWILIO_TOKEN:}
+    from: ${SMS_TWILIO_FROM:}
+
+# Structured console logs that mirror the Node logger exactly:
+#   [time] [LEVEL] [scope] method :: rid=<id> message
+# rid is the X-Request-ID from the client (or srv-<uuid>), embedded in each
+# request log line by the filters; MDC also exposes it for any logger that
+# opts in via %X{rid}.
+logging:
+  level:
+    root: INFO
+  pattern:
+    console: "[%d{HH:mm:ss}] [%level] [%logger{1}] %msg%n"
+  # Latest-logging extras (Spring Boot built-in structured logging — switch to
+  # ECS JSON for production / log shipping by uncommenting one line):
+  # structured:
+  #   format:
+  #     console: ecs
+
+# Enterprise observability: /actuator/health (+ liveness/readiness probes),
+# /actuator/info, metrics. Probes are on by default in Boot 4.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

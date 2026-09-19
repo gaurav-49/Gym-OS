@@ -1,0 +1,278 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <!-- Latest stable line (2026): Spring Boot 4.1 / Spring Framework 7 / Spring Security 7 / Jackson 3 -->
+        <version>4.1.0</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>com.gymos</groupId>
+    <artifactId>gym-backend-java</artifactId>
+    <version>0.2.0</version>
+    <packaging>war</packaging>
+    <name>GYM OS backend (Spring Boot)</name>
+    <description>
+        Enterprise Java port of the GYM OS Express backend.
+        Layered architecture: Controller → Service (interface) → ServiceImpl → DAO (interface) → DAOImpl (SQL),
+        with shared cross-cutting code in common/. Same /api contract, same gymdb schema.
+    </description>
+
+    <properties>
+        <!-- Java 25 (LTS, 2026) — the newest release that runs on the official
+             Tomcat 11 Docker images (JDK 25) AND on the local Homebrew JDK 26,
+             so the same WAR deploys to an enterprise server and runs standalone.
+             Boot 4.1 supports 17..26. -->
+        <java.version>25</java.version>
+        <!-- Latest jjwt (JWT for Java) -->
+        <jjwt.version>0.13.0</jjwt.version>
+        <!-- Latest Testcontainers (Boot 4's BOM no longer manages it). -->
+        <testcontainers.version>2.0.5</testcontainers.version>
+        <!-- WAR packaging: the default build excludes embedded Tomcat (scope
+             provided) so the WAR deploys cleanly to an external Tomcat 11.
+             The 'standalone' profile flips this to compile, keeping the
+             java -jar single-command workflow working. -->
+        <tomcat.scope>provided</tomcat.scope>
+        <!-- The frontend (React/Vite) is built automatically during mvn package
+             and bundled into the WAR. Set -Dskip.ui=true to skip it. -->
+        <skip.ui>false</skip.ui>
+    </properties>
+
+    <dependencies>
+        <!-- Boot 4 renamed spring-boot-starter-web → spring-boot-starter-webmvc -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webmvc</artifactId>
+        </dependency>
+        <dependency>
+            <!-- Embedded Tomcat. Scope is ${tomcat.scope}: 'provided' for a
+                 lean WAR that runs on an external Tomcat 11, or 'compile'
+                 (standalone profile) so `java -jar` embeds its own server. -->
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-tomcat</artifactId>
+            <scope>${tomcat.scope}</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
+        <dependency>
+            <!-- Enterprise observability: /actuator/health (+ liveness/readiness probes), /actuator/info, metrics -->
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- JWT (HS256) — latest jjwt -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>${jjwt.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>${jjwt.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>${jjwt.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- Tests: JUnit 5 + AssertJ (spring-boot-starter-test), Security test utilities -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Boot 4 modularized the test starters: MockMvc auto-configuration now
+             lives in spring-boot-starter-webmvc-test. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webmvc-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Integration tests run against a throwaway Postgres in Docker
+             (Testcontainers). -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-postgresql</artifactId>
+            <version>${testcontainers.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-junit-jupiter</artifactId>
+            <version>${testcontainers.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+            <!-- Build the React UI (frontend/) and bundle dist/ into the WAR so
+                 one artifact serves both the UI and the /api endpoints.
+                 Bound to prepare-package: `mvn test` stays fast (no UI build),
+                 `mvn package` produces the full application. -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.5.0</version>
+                <executions>
+                    <execution>
+                        <id>npm-ci</id>
+                        <phase>prepare-package</phase>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <configuration>
+                            <workingDirectory>${project.basedir}/../frontend</workingDirectory>
+                            <executable>npm</executable>
+                            <arguments>
+                                <argument>ci</argument>
+                            </arguments>
+                            <skip>${skip.ui}</skip>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>npm-build</id>
+                        <phase>prepare-package</phase>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <configuration>
+                            <workingDirectory>${project.basedir}/../frontend</workingDirectory>
+                            <executable>npm</executable>
+                            <arguments>
+                                <argument>run</argument>
+                                <argument>build</argument>
+                            </arguments>
+                            <skip>${skip.ui}</skip>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <!-- Wipe target/classes/static before the UI is copied in. Vite
+                 fingerprints every bundle (index-<hash>.js), and copy-resources
+                 merges rather than replaces, so without this each incremental
+                 `mvn package` (no `clean`) left the previous build's bundle
+                 behind: 19 dead bundles and a 43 MB war instead of ~5 MB. Only
+                 index.html names the live one, so nothing ever served the
+                 strays; they just shipped. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-clean-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>clean-stale-ui</id>
+                        <phase>prepare-package</phase>
+                        <goals>
+                            <goal>clean</goal>
+                        </goals>
+                        <configuration>
+                            <excludeDefaultDirectories>true</excludeDefaultDirectories>
+                            <filesets>
+                                <fileset>
+                                    <directory>${project.build.outputDirectory}/static</directory>
+                                </fileset>
+                                <!-- The war plugin packages from its exploded
+                                     directory, which merges the same way, so
+                                     stale bundles survive there too. -->
+                                <fileset>
+                                    <directory>${project.build.directory}/${project.build.finalName}/WEB-INF/classes/static</directory>
+                                </fileset>
+                            </filesets>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <!-- Copy the Vite build output into target/classes/static so the WAR
+                 ships index.html + assets under WEB-INF/classes/static (served
+                 by Spring Boot at / on the same origin as /api). -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-resources-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>copy-ui</id>
+                        <phase>prepare-package</phase>
+                        <goals>
+                            <goal>copy-resources</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.outputDirectory}/static</outputDirectory>
+                            <resources>
+                                <resource>
+                                    <directory>${project.basedir}/../frontend/dist</directory>
+                                </resource>
+                            </resources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+        <testResources>
+            <testResource>
+                <directory>src/test/resources</directory>
+            </testResource>
+            <!-- Share the one source of truth for the schema with the tests: the
+                 idempotent db/schema.sql lands on the test classpath as
+                 schema.sql, so the Testcontainers integration tests apply it.
+
+                 2.0 keeps its schema in "Gym 2.0/db", not "backend/db" — this
+                 path was carried over from 1.0's layout, where that directory
+                 exists. Here it did not, so every integration test failed on a
+                 missing classpath resource before it reached an assertion. -->
+            <testResource>
+                <directory>../db</directory>
+                <includes>
+                    <include>schema.sql</include>
+                </includes>
+            </testResource>
+        </testResources>
+    </build>
+
+    <profiles>
+        <!-- java -jar workflow (embedded Tomcat bundled into the WAR). -->
+        <profile>
+            <id>standalone</id>
+            <properties>
+                <tomcat.scope>compile</tomcat.scope>
+            </properties>
+        </profile>
+    </profiles>
+</project>

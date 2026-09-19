@@ -1,0 +1,50 @@
+###############################################################################
+#  BRANCHES — more than one location
+#  /api/branches
+#
+#  Members, staff and takings can each belong to a branch, so a chain can see
+#  one location at a time or all of them together.
+#
+#  Row ids in these samples are placeholders — take a real one from the
+#  list request above it, or from the variable it captures.
+#  Send the sign-in block first — it sets the token every request below uses.
+#  Bodies work as-is against the demo data from db/seed-demo.js.
+#  [CHANGES DATA] marks anything that writes.
+###############################################################################
+
+@host = http://localhost:8080
+@json = Content-Type: application/json
+
+### Sign in as staff  ← run me first
+# @name login
+POST {{host}}/api/auth/login
+{{json}}
+
+{ "username": "admin", "password": "admin123" }
+
+###
+@staff = {{login.response.body.token}}
+
+
+### Every branch
+GET {{host}}/api/branches
+Authorization: Bearer {{staff}}
+
+### Open one  [CHANGES DATA]
+POST {{host}}/api/branches
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "name": "Jehanabad — Station Road", "address": "Station Road, Jehanabad",
+  "phone": "0612-2345678" }
+
+### Update  [CHANGES DATA]
+PUT {{host}}/api/branches/1
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "phone": "0612-2345679" }
+
+### Delete  [CHANGES DATA]
+DELETE {{host}}/api/branches/99999
+Authorization: Bearer {{staff}}

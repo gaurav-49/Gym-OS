@@ -1,0 +1,54 @@
+###############################################################################
+#  MEMBER REFERRALS — the member's own Refer & earn tab
+#  /api/member/referrals
+#
+#  The member's code is the first four letters of their name plus their padded
+#  ID (GAUR0001). A phone number is required — several people share a name.
+#
+#  Row ids in these samples are placeholders — take a real one from the
+#  list request above it, or from the variable it captures.
+#  Send the sign-in block first — it sets the token every request below uses.
+#  Bodies work as-is against the demo data from db/seed-demo.js.
+#  [CHANGES DATA] marks anything that writes.
+###############################################################################
+
+@host = http://localhost:8080
+@json = Content-Type: application/json
+
+### Sign in as a member  ← run me first
+# 5050 is the demo member who has a trainer, a PT plan and every tab filled.
+# @name memberLogin
+POST {{host}}/api/member/login
+{{json}}
+
+{ "member_code": "5050", "password": "admin" }
+
+###
+@member = {{memberLogin.response.body.token}}
+
+
+### My code, the offer, and everyone I have invited
+GET {{host}}/api/member/referrals
+Authorization: Bearer {{member}}
+
+### Invite someone  [CHANGES DATA]
+POST {{host}}/api/member/referrals
+Authorization: Bearer {{member}}
+{{json}}
+
+{ "referred_name": "Rahul Sharma", "referred_phone": "9876500001" }
+
+### Rejected: no phone number → 400
+# Names repeat; the phone is what tells two Rahuls apart when one walks in.
+POST {{host}}/api/member/referrals
+Authorization: Bearer {{member}}
+{{json}}
+
+{ "referred_name": "Rahul Sharma" }
+
+### Rejected: inviting the same number twice → 409
+POST {{host}}/api/member/referrals
+Authorization: Bearer {{member}}
+{{json}}
+
+{ "referred_name": "Rahul Sharma", "referred_phone": "9876500001" }

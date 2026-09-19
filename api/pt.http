@@ -1,0 +1,117 @@
+###############################################################################
+#  PERSONAL TRAINING — plans, subscriptions, commissions
+#  /api/pt
+#
+#  PT is sold exactly like membership: Monthly, Quarterly, Half-Yearly or
+#  Yearly at a fee for the term, with the trainer's time included. Not by the
+#  session. The term sets the validity; the fee divided by the term is the
+#  monthly rate every screen shows next to it.
+#
+#  Row ids in these samples are placeholders — take a real one from the
+#  list request above it, or from the variable it captures.
+#  Send the sign-in block first — it sets the token every request below uses.
+#  Bodies work as-is against the demo data from db/seed-demo.js.
+#  [CHANGES DATA] marks anything that writes.
+###############################################################################
+
+@host = http://localhost:8080
+@json = Content-Type: application/json
+
+### Sign in as staff  ← run me first
+# @name login
+POST {{host}}/api/auth/login
+{{json}}
+
+{ "username": "admin", "password": "admin123" }
+
+###
+@staff = {{login.response.body.token}}
+
+
+### The plan catalogue
+GET {{host}}/api/pt/packages
+Authorization: Bearer {{staff}}
+
+### Only the ones still sold
+GET {{host}}/api/pt/packages?active=true
+Authorization: Bearer {{staff}}
+
+### Add a plan  [CHANGES DATA]
+POST {{host}}/api/pt/packages
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "name": "Sample PT Quarterly", "plan_type": "Quarterly", "price": 16500,
+  "trainer_commission_percent": 15 }
+
+### Rejected: no term → 400
+# The term is the product. Without it there is nothing to sell.
+POST {{host}}/api/pt/packages
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "name": "No Term", "price": 5000 }
+
+### Rejected: a duplicate name → 409
+POST {{host}}/api/pt/packages
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "name": "Sample PT Quarterly", "plan_type": "Monthly", "price": 6000 }
+
+### Reprice or retire one  [CHANGES DATA]
+PUT {{host}}/api/pt/packages/1
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "price": 17500, "is_active": true }
+
+### Delete — refused while anyone is on it  [CHANGES DATA]
+DELETE {{host}}/api/pt/packages/1
+Authorization: Bearer {{staff}}
+
+### Who is training
+GET {{host}}/api/pt/subscriptions
+Authorization: Bearer {{staff}}
+
+### ...for one trainer
+GET {{host}}/api/pt/subscriptions?trainer_id=2&status=active
+Authorization: Bearer {{staff}}
+
+### Sell a plan  [CHANGES DATA]
+# Books the subscription, the payment and the trainer's commission in one
+# transaction — in 1.0 these three could not be reconciled.
+POST {{host}}/api/pt/subscriptions
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "member_id": 1, "package_id": 1, "trainer_id": 2, "method": "UPI" }
+
+### Rejected: a second live plan for the same member → 409
+POST {{host}}/api/pt/subscriptions
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "member_id": 1, "package_id": 1, "trainer_id": 2, "method": "Cash" }
+
+### Cancel one  [CHANGES DATA]
+PUT {{host}}/api/pt/subscriptions/1
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "status": "cancelled" }
+
+### Log a delivered session  [CHANGES DATA]
+POST {{host}}/api/pt/subscriptions/1/session
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "session_date": "2026-09-06", "session_time": "07:30", "notes": "Push day — chest and triceps" }
+
+### That subscription's sessions
+GET {{host}}/api/pt/subscriptions/1/sessions
+Authorization: Bearer {{staff}}
+
+### Trainer commissions still to pay
+GET {{host}}/api/pt/commissions?status=pending
+Authorization: Bearer {{staff}}

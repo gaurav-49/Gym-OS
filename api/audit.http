@@ -1,0 +1,39 @@
+###############################################################################
+#  AUDIT TRAIL — who changed what
+#  /api/audit
+#
+#  Every write records the actor, the module, the row and a sentence of plain
+#  English. Read-only: the trail cannot be edited from the app.
+#
+#  Row ids in these samples are placeholders — take a real one from the
+#  list request above it, or from the variable it captures.
+#  Send the sign-in block first — it sets the token every request below uses.
+#  Bodies work as-is against the demo data from db/seed-demo.js.
+#  [CHANGES DATA] marks anything that writes.
+###############################################################################
+
+@host = http://localhost:8080
+@json = Content-Type: application/json
+
+### Sign in as staff  ← run me first
+# @name login
+POST {{host}}/api/auth/login
+{{json}}
+
+{ "username": "admin", "password": "admin123" }
+
+###
+@staff = {{login.response.body.token}}
+
+
+### The trail
+GET {{host}}/api/audit?limit=50
+Authorization: Bearer {{staff}}
+
+### One module
+GET {{host}}/api/audit?module=members&limit=20
+Authorization: Bearer {{staff}}
+
+### Counts by action and module
+GET {{host}}/api/audit/summary
+Authorization: Bearer {{staff}}

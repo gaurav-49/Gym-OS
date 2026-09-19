@@ -1,0 +1,35 @@
+# Test profile — the datasource below is overridden at runtime by
+# BaseIntegrationTest's @DynamicPropertySource, which points the context at a
+# throwaway Testcontainers Postgres in Docker (never the real gymdb). The
+# idempotent schema.sql is applied automatically by BaseIntegrationTest (it
+# lives on the test classpath via the pom testResources entry).
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 5
+
+app:
+  jwt:
+    # Fixed test secret so tokens are stable across test runs.
+    secret: test-jwt-secret-not-for-prod-1234567890
+    expiry-days: 7
+  otp:
+    ttl-minutes: 10
+    max-sends-per-hour: 5
+    max-failed-attempts: 5
+    lockout-minutes: 15
+  smtp:
+    host: ""          # console fallback -> dev_otp is returned, like local dev
+  twilio:
+    sid: ""           # console fallback
+  scheduling:
+    enabled: false    # no hourly reminder/auto-renew jobs racing the tests
+
+# Keep test logs quiet so failures are easy to spot, but always render stack
+# traces so a swallowed exception never hides the root cause.
+logging:
+  level:
+    root: WARN
+    com.gymos: INFO
+  pattern:
+    console: "[%d{HH:mm:ss}] [%level] [%logger{1}] %msg%n%ex"

@@ -1,0 +1,60 @@
+###############################################################################
+#  BRANDING — this gym's own identity
+#  /api/branding
+#
+#  The product is sold to many gyms, so nothing gym-facing is hard-coded. The
+#  GET is deliberately public: the sign-in screen has to show the gym's name
+#  before anyone has signed in, so it carries public identity and nothing else.
+#
+#  Values come from branding.properties (the file a reseller edits per site),
+#  with anything an admin has changed in the app layered on top.
+#
+#  Row ids in these samples are placeholders — take a real one from the
+#  list request above it, or from the variable it captures.
+#  Send the sign-in block first — it sets the token every request below uses.
+#  Bodies work as-is against the demo data from db/seed-demo.js.
+#  [CHANGES DATA] marks anything that writes.
+###############################################################################
+
+@host = http://localhost:8080
+@json = Content-Type: application/json
+
+### Sign in as staff  ← run me first
+# @name login
+POST {{host}}/api/auth/login
+{{json}}
+
+{ "username": "admin", "password": "admin123" }
+
+###
+@staff = {{login.response.body.token}}
+
+
+### Public — no token
+GET {{host}}/api/branding
+
+### Change it (admin only)  [CHANGES DATA]
+PUT {{host}}/api/branding
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "name": "Gold's Gym, Jehanabad",
+  "quote": "A place to learn, A chance to grow your body and mind",
+  "phone": "0612-2345678", "email": "hello@goldsgym.local",
+  "address": "Station Road, Jehanabad, Bihar 804408",
+  "gstin": "10ABCDE1234F1Z5",
+  "receipt_note": "Fees once paid are non-refundable and non-transferable." }
+
+### Rejected: a blank name would leave every screen unlabelled → 400
+PUT {{host}}/api/branding
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "name": "" }
+
+### Rejected: a colour that is not a hex value → 400
+PUT {{host}}/api/branding
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "colour": "greenish" }

@@ -1,0 +1,62 @@
+###############################################################################
+#  DEVICES — turnstiles, card readers and their punches
+#  /api/devices, /api/device/punch
+#
+#  The punch endpoint is what a reader on the wall calls. It runs the same gate
+#  as every other door. A device needs both a name and an IP address.
+#
+#  Row ids in these samples are placeholders — take a real one from the
+#  list request above it, or from the variable it captures.
+#  Send the sign-in block first — it sets the token every request below uses.
+#  Bodies work as-is against the demo data from db/seed-demo.js.
+#  [CHANGES DATA] marks anything that writes.
+###############################################################################
+
+@host = http://localhost:8080
+@json = Content-Type: application/json
+
+### Sign in as staff  ← run me first
+# @name login
+POST {{host}}/api/auth/login
+{{json}}
+
+{ "username": "admin", "password": "admin123" }
+
+###
+@staff = {{login.response.body.token}}
+
+
+### Registered devices
+GET {{host}}/api/devices
+Authorization: Bearer {{staff}}
+
+### Register one  [CHANGES DATA]
+POST {{host}}/api/devices
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "name": "Front desk terminal", "ip_address": "192.168.1.50", "port": 4370, "is_active": true }
+
+### Rejected: an empty form used to create a nameless device → 400
+POST {{host}}/api/devices
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ }
+
+### Update  [CHANGES DATA]
+PUT {{host}}/api/devices/1
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "name": "Front desk terminal", "ip_address": "192.168.1.51", "is_active": false }
+
+### Delete  [CHANGES DATA]
+DELETE {{host}}/api/devices/99
+Authorization: Bearer {{staff}}
+
+### A card tapped on a reader — no auth, the device is on the gym's own network
+POST {{host}}/api/device/punch
+{{json}}
+
+{ "card_uid": "A1B2C3D4" }

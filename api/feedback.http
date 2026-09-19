@@ -1,0 +1,53 @@
+###############################################################################
+#  FEEDBACK — what members say back
+#  /api/feedback
+#
+#  Members leave a rating and a comment from their portal; this is the staff
+#  side of the same table.
+#
+#  Row ids in these samples are placeholders — take a real one from the
+#  list request above it, or from the variable it captures.
+#  Send the sign-in block first — it sets the token every request below uses.
+#  Bodies work as-is against the demo data from db/seed-demo.js.
+#  [CHANGES DATA] marks anything that writes.
+###############################################################################
+
+@host = http://localhost:8080
+@json = Content-Type: application/json
+
+### Sign in as staff  ← run me first
+# @name login
+POST {{host}}/api/auth/login
+{{json}}
+
+{ "username": "admin", "password": "admin123" }
+
+###
+@staff = {{login.response.body.token}}
+
+
+### Everything left
+GET {{host}}/api/feedback
+Authorization: Bearer {{staff}}
+
+### The averages
+GET {{host}}/api/feedback/summary
+Authorization: Bearer {{staff}}
+
+### Record feedback taken at the desk  [CHANGES DATA]
+POST {{host}}/api/feedback
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "member_id": 1, "rating": 5, "comment": "The new equipment is excellent." }
+
+### Rejected: a rating outside 1-5 → 400
+POST {{host}}/api/feedback
+Authorization: Bearer {{staff}}
+{{json}}
+
+{ "member_id": 1, "rating": 9 }
+
+### Delete  [CHANGES DATA]
+DELETE {{host}}/api/feedback/99999
+Authorization: Bearer {{staff}}
