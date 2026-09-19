@@ -1,9 +1,17 @@
 # Deploy GYM OS to the Oracle Cloud server.
 #
 # Run it from the Actions tab (or `gh workflow run deploy.yml`). The runner
-# SSHes to the server and runs the same script you would run by hand — the
-# difference is that the key lives in GitHub's encrypted secrets rather than
-# on somebody's laptop, and every deploy leaves a log.
+# checks out this repo, then pipes the deploy script (install.sh or
+# migrate-to-shared.sh, whichever mode calls for) straight to the server over
+# SSH — the server never fetches anything from GitHub itself. That's
+# deliberate: it means the same content the workflow is running from is what
+# runs on the server, with no dependency on raw.githubusercontent.com (which
+# has 404'd for entire repos before, unrelated to anything in this file) or
+# on propagation delay after a push.
+#
+# The difference from running it by hand is that the key lives in GitHub's
+# encrypted secrets rather than on somebody's laptop, and every deploy leaves
+# a log.
 #
 # Two modes, picked by the "shared_edge" input:
 #
@@ -94,6 +102,14 @@ jobs:
             [ -n "$GO_DOMAIN" ] || { echo "::error::shared_edge needs gymos_domain"; exit 1; }
           fi
 
+      # The runner's own copy of this repo, at the ref that triggered the
+      # run. install.sh and migrate-to-shared.sh are piped to the server from
+      # here over the SSH connection below, rather than the server curling
+      # them from raw.githubusercontent.com: that CDN can lag a push (or, as
+      # happened once, 404 outright for reasons outside this repo), and a
+      # checkout the runner already has is both faster and not subject to it.
+      - uses: actions/checkout@v4
+
       # Secrets go in through env rather than ${{ }} inside the script, so
       # nothing from them is ever pasted into the shell as code.
       - name: Configure SSH
@@ -131,20 +147,20 @@ jobs:
           DEPLOY_TZ: ${{ inputs.timezone }}
           BRANCH: ${{ github.ref_name }}
         run: |
-          # Built here and passed over stdin so the remote shell never has to
-          # quote user input back at itself.
+          # install.sh itself is appended verbatim below, from this runner's
+          # own checkout — not curled by the server — so the env exports
+          # ahead of it need no quoting trick for anything past this point.
           {
             echo "set -euo pipefail"
             echo "export BRANCH=$(printf '%q' "$BRANCH")"
             [ -n "$DEPLOY_DOMAIN" ] && echo "export DOMAIN=$(printf '%q' "$DEPLOY_DOMAIN")"
             [ "$DEPLOY_SEED" = "true" ] && echo "export SEED_DEMO=1"
             [ -n "$DEPLOY_TZ" ] && echo "export TZ=$(printf '%q' "$DEPLOY_TZ")"
-            echo 'curl -fsSL "https://raw.githubusercontent.com/${{ github.repository }}/${BRANCH}/deploy/install.sh" -o /tmp/install.sh'
-            echo 'sudo -E bash /tmp/install.sh'
+            cat deploy/install.sh
           } > /tmp/remote.sh
 
           ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o ConnectTimeout=20 \
-            "$USER@$HOST" 'bash -s' < /tmp/remote.sh
+            "$USER@$HOST" 'sudo -E bash -s' < /tmp/remote.sh
 
       - name: Run the shared-edge migration
         if: inputs.shared_edge == true
@@ -153,18 +169,16 @@ jobs:
           USER: ${{ secrets.ORACLE_USER }}
           IR_DOMAIN: ${{ inputs.insightrag_domain }}
           GO_DOMAIN: ${{ inputs.gymos_domain }}
-          BRANCH: ${{ github.ref_name }}
         run: |
           {
             echo "set -euo pipefail"
             echo "export INSIGHTRAG_DOMAIN=$(printf '%q' "$IR_DOMAIN")"
             echo "export GYMOS_DOMAIN=$(printf '%q' "$GO_DOMAIN")"
-            echo 'curl -fsSL "https://raw.githubusercontent.com/${{ github.repository }}/'"$BRANCH"'/deploy/edge/migrate-to-shared.sh" -o /tmp/migrate-to-shared.sh'
-            echo 'sudo -E bash /tmp/migrate-to-shared.sh'
+            cat deploy/edge/migrate-to-shared.sh
           } > /tmp/remote.sh
 
           ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o ConnectTimeout=20 \
-            "$USER@$HOST" 'bash -s' < /tmp/remote.sh
+            "$USER@$HOST" 'sudo -E bash -s' < /tmp/remote.sh
 
       - name: Check the standalone deploy answers
         if: inputs.shared_edge != true
