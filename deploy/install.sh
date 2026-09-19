@@ -138,11 +138,18 @@ DOMAIN="$(env_get DOMAIN)"
 # container that restarts forever.
 say "Applying the database schema"
 "${COMPOSE[@]}" up -d postgres --wait --wait-timeout 180
-"${COMPOSE[@]}" run --rm migrate
+# -T (no pseudo-tty) and < /dev/null: this script is itself usually run via
+# `curl ... | sudo bash` or piped over SSH, so its own stdin is the rest of
+# THIS script, not a terminal. `docker compose run` attaches to stdin by
+# default, and without these it will consume everything after this line as
+# its own input -- the script then exits 0 having silently skipped the app
+# build and startup below. (Found the hard way: a "successful" deploy that
+# never actually started the app.)
+"${COMPOSE[@]}" run --rm -T migrate < /dev/null
 
 if [[ "${SEED_DEMO:-0}" == "1" ]]; then
   say "Loading the demo gym"
-  "${COMPOSE[@]}" run --rm migrate sh -c "node seed-demo.js"
+  "${COMPOSE[@]}" run --rm -T migrate sh -c "node seed-demo.js" < /dev/null
 fi
 
 say "Building and starting GYM OS (first run takes 5-10 minutes)"

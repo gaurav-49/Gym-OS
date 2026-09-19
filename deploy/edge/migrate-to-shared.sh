@@ -97,7 +97,7 @@ say "Applying the GYM OS schema"
   docker compose -p gym-os -f docker-compose.yml -f docker-compose.shared-edge.yml \
     up -d postgres --wait --wait-timeout 180 && \
   docker compose -p gym-os -f docker-compose.yml -f docker-compose.shared-edge.yml \
-    run --rm migrate )
+    run --rm -T migrate < /dev/null )
 
 say "Deploying GYM OS without its own Caddy"
 ( cd "$GYMOS_DIR" && docker compose -p gym-os \
