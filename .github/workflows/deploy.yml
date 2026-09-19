@@ -247,6 +247,23 @@ jobs:
           curl -sS -o /dev/null -w "HTTP %{http_code}\n" "https://$IR_DOMAIN/api/v1/health" || echo "not reachable over HTTPS yet"
           echo "-- GYM OS: $GO_DOMAIN --"
           curl -sS -o /dev/null -w "HTTP %{http_code}\n" "https://$GO_DOMAIN/" || echo "not reachable over HTTPS yet"
+
+          # A deploy that comes up healthy but has no staff account is not a
+          # working deploy -- that exact state shipped once and looked green.
+          # Count only; never print a credential.
+          echo "-- GYM OS staff accounts --"
+          cd /opt/gym-os
+          db_user=$(grep -E '^DB_USER=' .env | cut -d= -f2-); db_user=${db_user:-gymos}
+          db_name=$(grep -E '^DB_NAME=' .env | cut -d= -f2-); db_name=${db_name:-gymdb}
+          admins=$(sudo docker compose -p gym-os exec -T postgres \
+            psql -U "$db_user" -d "$db_name" -tAc \
+            "SELECT count(*) FROM users WHERE role = 'admin'" 2>/dev/null | tr -d '[:space:]')
+          if [ "${admins:-0}" -ge 1 ] 2>/dev/null; then
+            echo "$admins admin account(s) present — sign-in is possible"
+          else
+            echo "::error::no admin account exists — nobody can sign in to GYM OS"
+            exit 1
+          fi
           REMOTE
 
       - name: Remove the key from the runner
@@ -268,7 +285,8 @@ jobs:
             echo
             echo "The domain is printed in the installer step above."
             echo
-            echo "If this was the first deploy, change the \`admin\`/\`admin123\` password now."
+            echo "First sign-in: the staff account from the \"Making sure a staff account exists\" step."
+            echo "A generated password is at /opt/gym-os/db/.admin-credentials on the server (chmod 600)."
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Summary
@@ -283,5 +301,8 @@ jobs:
             echo "| GYM OS staff | \`https://${{ inputs.gymos_domain }}/\` |"
             echo "| GYM OS members | \`https://${{ inputs.gymos_domain }}/#/member\` |"
             echo
-            echo "If this was GYM OS's first deploy, change the \`admin\`/\`admin123\` password now."
+            echo "First sign-in: the staff account from the \"Making sure a staff account exists\" step."
+            echo "A generated password is at /opt/gym-os/db/.admin-credentials on the server (chmod 600):"
+            echo
+            echo "    ssh <user>@<host> 'sudo cat /opt/gym-os/db/.admin-credentials'"
           } >> "$GITHUB_STEP_SUMMARY"
