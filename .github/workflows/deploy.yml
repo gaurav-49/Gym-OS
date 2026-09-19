@@ -82,6 +82,14 @@ on:
         description: "Path on the server to a pg_dump to restore into GYM OS first, e.g. /tmp/gymos.dump. REPLACES the database. Leave blank to skip."
         required: false
         default: ""
+      seed_attendance:
+        description: "Write demo attendance history (insert-only, never overwrites a real check-in)"
+        type: boolean
+        default: false
+      seed_attendance_members:
+        description: "How many members to give attendance to (default 450)"
+        required: false
+        default: "450"
 
 # One deploy at a time. Two installers racing on the same machine would fight
 # over the same directories and the Docker daemon.
@@ -277,6 +285,36 @@ jobs:
           curl -sS -o /dev/null -w "HTTP %{http_code}\n" "https://$domain/" || echo "not reachable over HTTPS yet"
           echo "-- the member portal is the same document; #/member is client-side --"
           REMOTE
+
+      # After the migration, so the schema is current, and after the app is
+      # up, so a failure here never blocks the deploy itself.
+      - name: Seed demo attendance
+        if: inputs.seed_attendance == true
+        env:
+          HOST: ${{ secrets.ORACLE_HOST }}
+          USER: ${{ secrets.ORACLE_USER }}
+          SEED_MEMBERS: ${{ inputs.seed_attendance_members }}
+        run: |
+          {
+            echo "set -euo pipefail"
+            echo "MEMBERS=$(printf '%q' "$SEED_MEMBERS")"
+            cat <<'REMOTE'
+          cd /opt/gym-os
+
+          # This writes to the live database. Insert-only and ON CONFLICT DO
+          # NOTHING, so it cannot overwrite a real check-in, but take the
+          # backup anyway — it costs seconds and the alternative is regret.
+          echo "==> Backing up before writing"
+          GYMOS_DIR=/opt/gym-os ./deploy/backup.sh || echo "warning: pre-seed backup failed"
+
+          echo "==> Seeding attendance for $MEMBERS member(s)"
+          docker compose -p gym-os -f docker-compose.yml -f docker-compose.shared-edge.yml \
+            run --rm -T -e MEMBERS="$MEMBERS" migrate sh -c "node seed-attendance.js" < /dev/null
+          REMOTE
+          } > /tmp/seed.sh
+
+          ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o ConnectTimeout=20 \
+            "$USER@$HOST" 'sudo -E bash -s' < /tmp/seed.sh
 
       - name: Check the shared-edge deploy answers
         if: inputs.shared_edge == true
