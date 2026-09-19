@@ -253,8 +253,11 @@ jobs:
           # Count only; never print a credential.
           echo "-- GYM OS staff accounts --"
           cd /opt/gym-os
-          db_user=$(grep -E '^DB_USER=' .env | cut -d= -f2-); db_user=${db_user:-gymos}
-          db_name=$(grep -E '^DB_NAME=' .env | cut -d= -f2-); db_name=${db_name:-gymdb}
+          # .env is chmod 600 and root-owned, so this needs sudo — it runs as
+          # the SSH user. || true because the remote shell is `bash -se`: a
+          # grep that matches nothing exits 1 and would end the check.
+          db_user=$(sudo grep -E '^DB_USER=' .env 2>/dev/null | cut -d= -f2- || true); db_user=${db_user:-gymos}
+          db_name=$(sudo grep -E '^DB_NAME=' .env 2>/dev/null | cut -d= -f2- || true); db_name=${db_name:-gymdb}
           admins=$(sudo docker compose -p gym-os exec -T postgres \
             psql -U "$db_user" -d "$db_name" -tAc \
             "SELECT count(*) FROM users WHERE role = 'admin'" 2>/dev/null | tr -d '[:space:]')
