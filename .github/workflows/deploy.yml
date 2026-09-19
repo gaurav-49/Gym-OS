@@ -36,6 +36,14 @@
 #                       server's host key. Without it this workflow accepts
 #                       whatever key the host presents on the first connect,
 #                       which trusts the network for that moment.
+#
+#   GYMOS_ADMIN_PASSWORD  password for GYM OS's first staff account. A secret
+#                       rather than an input on purpose: inputs are echoed
+#                       into the run log, and a public repository's logs are
+#                       public. Leave it unset and the deploy generates one
+#                       and writes it to /opt/gym-os/db/.admin-credentials on
+#                       the server (chmod 600) instead of printing it.
+#                       Ignored once a staff account exists.
 
 name: Deploy to Oracle
 
@@ -66,6 +74,10 @@ on:
         description: "[shared_edge] GYM OS's hostname, e.g. gym.YOUR-IP.sslip.io"
         required: false
         default: ""
+      seed_demo_shared:
+        description: "[shared_edge] Also load the demo gym (120 members, every module)"
+        type: boolean
+        default: false
 
 # One deploy at a time. Two installers racing on the same machine would fight
 # over the same directories and the Docker daemon.
@@ -169,11 +181,19 @@ jobs:
           USER: ${{ secrets.ORACLE_USER }}
           IR_DOMAIN: ${{ inputs.insightrag_domain }}
           GO_DOMAIN: ${{ inputs.gymos_domain }}
+          # A secret, not an input: workflow_dispatch inputs are echoed into
+          # the run log verbatim, and this repository's logs are public.
+          # Unset is fine — the script then generates one and writes it to a
+          # file on the server instead of printing it.
+          ADMIN_PW: ${{ secrets.GYMOS_ADMIN_PASSWORD }}
+          SEED: ${{ inputs.seed_demo_shared }}
         run: |
           {
             echo "set -euo pipefail"
             echo "export INSIGHTRAG_DOMAIN=$(printf '%q' "$IR_DOMAIN")"
             echo "export GYMOS_DOMAIN=$(printf '%q' "$GO_DOMAIN")"
+            [ -n "$ADMIN_PW" ] && echo "export ADMIN_PASSWORD=$(printf '%q' "$ADMIN_PW")"
+            [ "$SEED" = "true" ] && echo "export SEED_DEMO=1"
             cat deploy/edge/migrate-to-shared.sh
           } > /tmp/remote.sh
 

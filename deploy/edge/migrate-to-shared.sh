@@ -13,7 +13,9 @@
 #
 # Optional: INSIGHTRAG_DIR (default /opt/insightrag), GYMOS_DIR (default
 # /opt/gym-os), EDGE_DIR (default /opt/edge), GYMOS_REPO_URL (default the
-# gaurav-49/Gym-OS GitHub repo).
+# gaurav-49/Gym-OS GitHub repo), ADMIN_USERNAME (default admin) and
+# ADMIN_PASSWORD (default generated, printed once during the run) for GYM OS's
+# first staff account.
 #
 # What it does, in order:
 #   1. Creates the shared_edge Docker network (safe to re-run).
@@ -28,8 +30,11 @@
 #      a server that already runs another app's Caddy (it would fail to bind
 #      80/443), so this script is GYM OS's bootstrap here, not a follow-up
 #      to one.
-#   5. Applies the GYM OS schema, then deploys the app.
-#   6. Brings up the one shared Caddy, fronting both.
+#   5. Applies the GYM OS schema and makes sure a staff account exists —
+#      nothing in the repo creates one, so without it the app comes up with
+#      no way to sign in.
+#   6. Deploys the GYM OS app.
+#   7. Brings up the one shared Caddy, fronting both.
 #
 # Idempotent: re-running it after either app updates just redeploys both.
 
@@ -98,6 +103,22 @@ say "Applying the GYM OS schema"
     up -d postgres --wait --wait-timeout 180 && \
   docker compose -p gym-os -f docker-compose.yml -f docker-compose.shared-edge.yml \
     run --rm -T migrate < /dev/null )
+
+# migrate.js creates the schema but no staff account, and seed-demo.js only
+# looks one up — so without this the app comes up perfectly and nobody can
+# sign in. Idempotent: leaves an existing admin (and its password) alone.
+say "Making sure a staff account exists"
+( cd "$GYMOS_DIR" && docker compose -p gym-os \
+    -f docker-compose.yml -f docker-compose.shared-edge.yml \
+    run --rm -T -e ADMIN_USERNAME -e ADMIN_PASSWORD \
+    migrate sh -c "node ensure-admin.js" < /dev/null )
+
+if [[ "${SEED_DEMO:-0}" == "1" ]]; then
+  say "Loading the demo gym"
+  ( cd "$GYMOS_DIR" && docker compose -p gym-os \
+      -f docker-compose.yml -f docker-compose.shared-edge.yml \
+      run --rm -T migrate sh -c "node seed-demo.js" < /dev/null )
+fi
 
 say "Deploying GYM OS without its own Caddy"
 ( cd "$GYMOS_DIR" && docker compose -p gym-os \

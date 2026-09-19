@@ -17,6 +17,8 @@
 # Optional settings (pass as environment variables, e.g. `... | sudo DOMAIN=my.duckdns.org bash`):
 #   DOMAIN         public hostname (default: <public-ip>.sslip.io)
 #   SEED_DEMO=1    also load the demo gym (120 members, 4 trainers, every module)
+#   ADMIN_USERNAME the first staff account's username (default: admin)
+#   ADMIN_PASSWORD its password (default: generated, printed once during the run)
 #   TZ             local time for reports and schedules (default: Asia/Kolkata)
 #   REPO_URL       git repository (default: https://github.com/gaurav-49/Gym-OS.git)
 #   BRANCH         default: main
@@ -147,6 +149,13 @@ say "Applying the database schema"
 # never actually started the app.)
 "${COMPOSE[@]}" run --rm -T migrate < /dev/null
 
+# migrate.js creates the schema but no staff account, and seed-demo.js only
+# looks one up — so without this the app comes up perfectly and nobody can
+# sign in. Idempotent: leaves an existing admin (and its password) alone.
+say "Making sure a staff account exists"
+"${COMPOSE[@]}" run --rm -T -e ADMIN_USERNAME -e ADMIN_PASSWORD \
+  migrate sh -c "node ensure-admin.js" < /dev/null
+
 if [[ "${SEED_DEMO:-0}" == "1" ]]; then
   say "Loading the demo gym"
   "${COMPOSE[@]}" run --rm -T migrate sh -c "node seed-demo.js" < /dev/null
@@ -173,9 +182,10 @@ cat <<EOF
  Both portals are the same deployment — one app, one origin. Members do
  not need a separate address beyond the #/member link.
 
- First sign-in:  admin / admin123
-   ↳ CHANGE THIS NOW. It is the documented default and is public.
-     Staff portal → Users → admin → set a new password.
+ First sign-in:  the staff account printed by the "Making sure a staff
+ account exists" step above. On a first deploy its password is generated
+ and shown there once; set ADMIN_PASSWORD to choose your own instead.
+   ↳ Change it after signing in: Staff portal → Users → that account.
 
  Members sign in with their Member ID and the password
  '$(env_get MEMBER_DEFAULT_PASSWORD)' (MEMBER_DEFAULT_PASSWORD in .env).
