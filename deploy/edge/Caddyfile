@@ -1,0 +1,57 @@
+# One Caddy, two sites. Let's Encrypt tells them apart by hostname (SNI), so
+# both get a real certificate on the same IP and the same 80/443.
+#
+# Each block is that app's own Caddyfile carried over unchanged, just
+# pointed at the app's container name instead of running its own Caddy.
+
+{$INSIGHTRAG_DOMAIN} {
+	encode gzip
+
+	@private path /api/v1/metrics
+	respond @private 404
+
+	reverse_proxy insightrag-api:8080 {
+		# Server-sent events (streamed answers) must not be buffered.
+		flush_interval -1
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		-Server
+	}
+
+	request_body {
+		max_size 27MB
+	}
+}
+
+{$GYMOS_DOMAIN} {
+	encode gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy no-referrer
+		-Server
+	}
+
+	# Member photos and document uploads are the largest thing posted here.
+	request_body {
+		max_size 25MB
+	}
+
+	# Every request goes through exactly one handle block, in the order below.
+
+	handle /actuator/health {
+		reverse_proxy gymos-app:8080
+	}
+	handle /actuator* {
+		respond 404
+	}
+	handle {
+		reverse_proxy gymos-app:8080
+	}
+}

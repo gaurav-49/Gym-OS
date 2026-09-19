@@ -179,6 +179,64 @@ at this size.
 
 ---
 
+## Hosting alongside another app on the same server
+
+`deploy/install.sh` assumes GYM OS owns ports 80 and 443. If the same box
+already runs something else with its own Caddy — InsightRAG, say — the two
+Caddys fight over those ports and only one wins.
+
+The fix is one shared Caddy in front of both, each app reached by hostname:
+
+```
+                         ┌─────────────┐
+  https://insightrag.…   │             │   insightrag-api:8080
+  ───────────────────────▶  shared     │───────────────────────▶ InsightRAG
+                         │  Caddy      │
+  https://gym.…          │  (80/443)  │   gymos-app:8080
+  ───────────────────────▶             │───────────────────────▶ GYM OS
+                         └─────────────┘
+```
+
+That's `deploy/edge/` — a small, separate Caddy stack that holds 80/443 and
+proxies to both apps over a shared Docker network (`shared_edge`). Each app
+stops running its own Caddy and instead deploys with
+`docker-compose.shared-edge.yml` in place of `docker-compose.prod.yml`, which
+drops its Caddy service and joins `shared_edge` under a fixed container name
+(`gymos-app`, `insightrag-api`) so the shared Caddy can find it.
+
+**If GYM OS is going on a server that already runs InsightRAG** (or vice
+versa), don't run `deploy/install.sh` for the second app — it'll fail to bind
+80/443, already held by the first app's Caddy. Instead, run the one migration
+script once, from GYM OS's repo (it drives both apps):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/gaurav-49/Gym-OS/main/deploy/edge/migrate-to-shared.sh \
+  -o /tmp/migrate-to-shared.sh
+
+sudo INSIGHTRAG_DOMAIN=insightrag.YOUR-IP.sslip.io \
+     GYMOS_DOMAIN=gym.YOUR-IP.sslip.io \
+     bash /tmp/migrate-to-shared.sh
+```
+
+It expects InsightRAG already deployed once standalone (so its `.env` and
+`JWT_SECRET` exist) and GYM OS deployed once standalone too — run
+`deploy/install.sh` for GYM OS first if it isn't. The script then:
+
+1. creates the `shared_edge` Docker network,
+2. redeploys InsightRAG with `docker-compose.shared-edge.yml` — `--remove-orphans`
+   retires its old Caddy container, since the new file set doesn't define one,
+3. deploys GYM OS the same way (schema, then the app),
+4. brings up the one shared Caddy in `deploy/edge/`, fronting both.
+
+Two distinct hostnames on one IP need no DNS of your own — sslip.io resolves
+any subdomain to the IP embedded in it, so `insightrag.203-0-113-10.sslip.io`
+and `gym.203-0-113-10.sslip.io` both just work, pointed at the same server.
+
+Re-running the migration script after either app updates is safe — it
+redeploys both from their current `main`.
+
+---
+
 ## Notes and gotchas
 
 **`DB_PASSWORD` is only read on the first start.** Postgres stores the password

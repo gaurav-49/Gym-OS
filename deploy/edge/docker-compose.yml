@@ -1,0 +1,33 @@
+# Shared HTTPS front door for every app hosted on this box — currently
+# InsightRAG and GYM OS. Two apps each running their own Caddy can't both
+# hold ports 80/443 on one machine, so this is the one Caddy that does, and
+# each app's own compose stack stays otherwise unaware of the other: it just
+# joins the shared_edge network via its own docker-compose.shared-edge.yml.
+#
+#   docker network create shared_edge      # once, before anything else
+#   docker compose -p edge up -d --build
+
+networks:
+  shared_edge:
+    external: true
+
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    networks:
+      - shared_edge
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      INSIGHTRAG_DOMAIN: ${INSIGHTRAG_DOMAIN:?set INSIGHTRAG_DOMAIN in .env}
+      GYMOS_DOMAIN: ${GYMOS_DOMAIN:?set GYMOS_DOMAIN in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

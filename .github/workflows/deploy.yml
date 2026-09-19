@@ -1,10 +1,19 @@
 # Deploy GYM OS to the Oracle Cloud server.
 #
 # Run it from the Actions tab (or `gh workflow run deploy.yml`). The runner
-# SSHes to the server and executes deploy/install.sh there, which is the same
-# thing you would do by hand — the difference is that the key lives in GitHub's
-# encrypted secrets rather than on somebody's laptop, and every deploy leaves a
-# log.
+# SSHes to the server and runs the same script you would run by hand — the
+# difference is that the key lives in GitHub's encrypted secrets rather than
+# on somebody's laptop, and every deploy leaves a log.
+#
+# Two modes, picked by the "shared_edge" input:
+#
+#   standalone (default) — GYM OS owns the server, runs deploy/install.sh,
+#     gets its own Caddy on 80/443.
+#
+#   shared_edge — the server also runs another app (InsightRAG) with its own
+#     Caddy already on 80/443. Runs deploy/edge/migrate-to-shared.sh instead,
+#     which puts one shared Caddy in front of both. See docs/deployment.md,
+#     "Hosting alongside another app on the same server", before using this.
 #
 # Required repository secrets (Settings → Secrets and variables → Actions):
 #
@@ -25,21 +34,33 @@ name: Deploy to Oracle
 on:
   workflow_dispatch:
     inputs:
+      shared_edge:
+        description: "Server also hosts another app (InsightRAG) — use the shared Caddy migration instead of standalone install"
+        type: boolean
+        default: false
       domain:
-        description: "Public hostname (blank = <public-ip>.sslip.io)"
+        description: "[standalone] Public hostname (blank = <public-ip>.sslip.io)"
         required: false
         default: ""
       seed_demo:
-        description: "Also load the demo gym (120 members, every module)"
+        description: "[standalone] Also load the demo gym (120 members, every module)"
         type: boolean
         default: false
       timezone:
-        description: "Local time for reports, schedules and expiry dates"
+        description: "[standalone] Local time for reports, schedules and expiry dates"
         required: false
         default: "Asia/Kolkata"
+      insightrag_domain:
+        description: "[shared_edge] InsightRAG's hostname, e.g. insightrag.YOUR-IP.sslip.io"
+        required: false
+        default: ""
+      gymos_domain:
+        description: "[shared_edge] GYM OS's hostname, e.g. gym.YOUR-IP.sslip.io"
+        required: false
+        default: ""
 
 # One deploy at a time. Two installers racing on the same machine would fight
-# over /opt/gym-os and the Docker daemon.
+# over the same directories and the Docker daemon.
 concurrency:
   group: deploy-oracle
   cancel-in-progress: false
@@ -50,11 +71,14 @@ jobs:
     timeout-minutes: 45
 
     steps:
-      - name: Check the secrets are set
+      - name: Check the secrets and inputs are set
         env:
           HOST: ${{ secrets.ORACLE_HOST }}
           USER: ${{ secrets.ORACLE_USER }}
           KEY: ${{ secrets.ORACLE_SSH_KEY }}
+          SHARED: ${{ inputs.shared_edge }}
+          IR_DOMAIN: ${{ inputs.insightrag_domain }}
+          GO_DOMAIN: ${{ inputs.gymos_domain }}
         run: |
           missing=""
           [ -n "$HOST" ] || missing="$missing ORACLE_HOST"
@@ -64,6 +88,10 @@ jobs:
             echo "::error::Missing repository secret(s):$missing"
             echo "Add them under Settings → Secrets and variables → Actions."
             exit 1
+          fi
+          if [ "$SHARED" = "true" ]; then
+            [ -n "$IR_DOMAIN" ] || { echo "::error::shared_edge needs insightrag_domain"; exit 1; }
+            [ -n "$GO_DOMAIN" ] || { echo "::error::shared_edge needs gymos_domain"; exit 1; }
           fi
 
       # Secrets go in through env rather than ${{ }} inside the script, so
@@ -93,7 +121,8 @@ jobs:
           ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o ConnectTimeout=20 \
             "$USER@$HOST" 'echo "connected to $(hostname) — $(. /etc/os-release && echo "$PRETTY_NAME")"'
 
-      - name: Run the installer
+      - name: Run the standalone installer
+        if: inputs.shared_edge != true
         env:
           HOST: ${{ secrets.ORACLE_HOST }}
           USER: ${{ secrets.ORACLE_USER }}
@@ -117,7 +146,28 @@ jobs:
           ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o ConnectTimeout=20 \
             "$USER@$HOST" 'bash -s' < /tmp/remote.sh
 
-      - name: Check both portals answer
+      - name: Run the shared-edge migration
+        if: inputs.shared_edge == true
+        env:
+          HOST: ${{ secrets.ORACLE_HOST }}
+          USER: ${{ secrets.ORACLE_USER }}
+          IR_DOMAIN: ${{ inputs.insightrag_domain }}
+          GO_DOMAIN: ${{ inputs.gymos_domain }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          {
+            echo "set -euo pipefail"
+            echo "export INSIGHTRAG_DOMAIN=$(printf '%q' "$IR_DOMAIN")"
+            echo "export GYMOS_DOMAIN=$(printf '%q' "$GO_DOMAIN")"
+            echo 'curl -fsSL "https://raw.githubusercontent.com/${{ github.repository }}/'"$BRANCH"'/deploy/edge/migrate-to-shared.sh" -o /tmp/migrate-to-shared.sh'
+            echo 'sudo -E bash /tmp/migrate-to-shared.sh'
+          } > /tmp/remote.sh
+
+          ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o ConnectTimeout=20 \
+            "$USER@$HOST" 'bash -s' < /tmp/remote.sh
+
+      - name: Check the standalone deploy answers
+        if: inputs.shared_edge != true
         env:
           HOST: ${{ secrets.ORACLE_HOST }}
           USER: ${{ secrets.ORACLE_USER }}
@@ -139,12 +189,38 @@ jobs:
           echo "-- the member portal is the same document; #/member is client-side --"
           REMOTE
 
+      - name: Check the shared-edge deploy answers
+        if: inputs.shared_edge == true
+        env:
+          HOST: ${{ secrets.ORACLE_HOST }}
+          USER: ${{ secrets.ORACLE_USER }}
+          IR_DOMAIN: ${{ inputs.insightrag_domain }}
+          GO_DOMAIN: ${{ inputs.gymos_domain }}
+        run: |
+          ssh -i ~/.ssh/id_deploy -o BatchMode=yes "$USER@$HOST" \
+            "IR_DOMAIN=$(printf '%q' "$IR_DOMAIN") GO_DOMAIN=$(printf '%q' "$GO_DOMAIN") bash -se" <<'REMOTE'
+          set -uo pipefail
+          echo "-- edge Caddy --"
+          sudo docker compose -p edge ps
+          echo
+          echo "-- InsightRAG --"
+          sudo docker compose -p insightrag ps
+          echo
+          echo "-- GYM OS --"
+          sudo docker compose -p gym-os ps
+          echo
+          echo "-- InsightRAG: $IR_DOMAIN --"
+          curl -sS -o /dev/null -w "HTTP %{http_code}\n" "https://$IR_DOMAIN/api/v1/health" || echo "not reachable over HTTPS yet"
+          echo "-- GYM OS: $GO_DOMAIN --"
+          curl -sS -o /dev/null -w "HTTP %{http_code}\n" "https://$GO_DOMAIN/" || echo "not reachable over HTTPS yet"
+          REMOTE
+
       - name: Remove the key from the runner
         if: always()
         run: rm -f ~/.ssh/id_deploy
 
       - name: Summary
-        if: success()
+        if: success() && inputs.shared_edge != true
         run: |
           {
             echo "### GYM OS deployed"
@@ -159,4 +235,19 @@ jobs:
             echo "The domain is printed in the installer step above."
             echo
             echo "If this was the first deploy, change the \`admin\`/\`admin123\` password now."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Summary
+        if: success() && inputs.shared_edge == true
+        run: |
+          {
+            echo "### GYM OS + InsightRAG, one shared Caddy"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| InsightRAG | \`https://${{ inputs.insightrag_domain }}/\` |"
+            echo "| GYM OS staff | \`https://${{ inputs.gymos_domain }}/\` |"
+            echo "| GYM OS members | \`https://${{ inputs.gymos_domain }}/#/member\` |"
+            echo
+            echo "If this was GYM OS's first deploy, change the \`admin\`/\`admin123\` password now."
           } >> "$GITHUB_STEP_SUMMARY"

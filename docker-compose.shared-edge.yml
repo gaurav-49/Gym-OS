@@ -1,0 +1,39 @@
+# Alternative production overlay for a server that hosts other apps too,
+# behind one shared Caddy — see deploy/edge/. Use this INSTEAD of
+# docker-compose.prod.yml, never alongside it: the two disagree about who
+# runs Caddy, and both want host ports 80/443.
+#
+#   docker compose -p gym-os -f docker-compose.yml -f docker-compose.shared-edge.yml up -d --build
+#
+# Same hardening as docker-compose.prod.yml (prod profile on, restarts, a
+# memory ceiling) but app joins the shared_edge network under a stable name
+# instead of running its own Caddy.
+
+networks:
+  shared_edge:
+    external: true
+
+services:
+  postgres:
+    ports: !reset []
+    restart: unless-stopped
+    mem_limit: 1g
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+
+  migrate:
+    environment:
+      DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+
+  app:
+    ports: !reset []
+    container_name: gymos-app
+    restart: unless-stopped
+    mem_limit: 1536m
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env (at least 32 random characters)}
+      DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+    networks:
+      - default
+      - shared_edge
