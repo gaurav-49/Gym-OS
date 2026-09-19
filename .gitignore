@@ -2,6 +2,8 @@
 .env
 .env.*
 !.env.example
+# ...including the per-deployment templates, e.g. deploy/.env.production.example
+!.env.*.example
 
 # Dependencies
 node_modules/

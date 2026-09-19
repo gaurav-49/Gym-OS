@@ -1,0 +1,82 @@
+# GYM OS 2.0 — the whole product on one machine.
+#
+#   docker compose up -d --build
+#   → staff portal   http://localhost:8080/
+#   → member portal  http://localhost:8080/#/member
+#
+# Both portals are the same app on the same origin; there is nothing separate
+# to deploy for members. For a public server with HTTPS, layer the production
+# overrides on top — see docs/deployment.md.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME:-gymdb}
+      POSTGRES_USER: ${DB_USER:-gymos}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-gymos}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      # Local convenience only: psql from the host. The prod overrides drop it.
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-gymos} -d ${DB_NAME:-gymdb}"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  # The schema, applied by the project's own db/migrate.js rather than a copy
+  # kept for Docker — that script IS the schema, and a second copy would drift.
+  # Idempotent, so it runs on every start and upgrades a 1.0 database in place.
+  migrate:
+    image: node:22-alpine
+    working_dir: /db
+    volumes:
+      - ./db:/db
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: ${DB_NAME:-gymdb}
+      DB_USER: ${DB_USER:-gymos}
+      DB_PASSWORD: ${DB_PASSWORD:-gymos}
+    command: sh -c "npm ci --no-audit --no-fund && node migrate.js"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: ${DB_NAME:-gymdb}
+      DB_USER: ${DB_USER:-gymos}
+      DB_PASSWORD: ${DB_PASSWORD:-gymos}
+      # Unset in dev means a per-process secret: logins survive until restart.
+      JWT_SECRET: ${JWT_SECRET:-}
+      MEMBER_DEFAULT_PASSWORD: ${MEMBER_DEFAULT_PASSWORD:-admin}
+      TZ: ${TZ:-UTC}
+      # Optional notification channels; blank disables them.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      SMS_TWILIO_SID: ${SMS_TWILIO_SID:-}
+      SMS_TWILIO_TOKEN: ${SMS_TWILIO_TOKEN:-}
+      SMS_TWILIO_FROM: ${SMS_TWILIO_FROM:-}
+    ports:
+      - "8080:8080"
+
+volumes:
+  pgdata:

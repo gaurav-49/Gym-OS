@@ -1,0 +1,18 @@
+# Keep the build context small and never ship secrets or host build output.
+.git
+.github
+.env
+.env.*
+!.env.example
+
+**/node_modules
+**/dist
+**/target
+
+api
+docs
+deploy/install.sh
+
+*.log
+.DS_Store
+.vscode

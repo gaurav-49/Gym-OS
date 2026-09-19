@@ -32,12 +32,36 @@ Connection settings come from the environment (`DB_HOST`, `DB_PORT`, `DB_NAME`,
 > **Set `JWT_SECRET` before going live.** Without it every restart logs everyone
 > out, and the `prod` profile refuses to start.
 
+### Or with Docker
+
+```bash
+docker compose up -d --build
+```
+
+Postgres, the schema and the app, on **http://localhost:8080**.
+
+## Deploy it
+
+One command on a fresh Ubuntu server (written for Oracle Cloud Always Free):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/gaurav-49/gym-os/main/deploy/install.sh | sudo bash
+```
+
+It installs Docker, opens the firewall, generates secrets, applies the schema
+and starts the stack behind automatic HTTPS. Both portals come up together —
+staff at `https://<domain>/`, members at `https://<domain>/#/member` — because
+they are one app on one origin. Re-run it to update; data and secrets survive.
+
+Full notes, including the Oracle security-list rule that catches everyone out:
+**[docs/deployment.md](docs/deployment.md)**.
+
 ---
 
 ## How it is put together
 
 ```
-backend-java/   Spring Boot 4 · Java 17 · JdbcTemplate over PostgreSQL
+backend-java/   Spring Boot 4 · Java 25 · JdbcTemplate over PostgreSQL
 frontend/       React 18 · Vite · MUI 7   → built into the war
 db/             migrate.js (the schema) · seed-demo.js (a demo gym)
 api/            one .http file per API, plus a scenario walkthrough

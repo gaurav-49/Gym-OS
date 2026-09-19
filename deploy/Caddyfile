@@ -1,0 +1,40 @@
+# HTTPS reverse proxy. Caddy obtains and renews a Let's Encrypt certificate
+# for $DOMAIN on the first request.
+#
+# Both portals live behind this one site block: the staff portal at / and the
+# member portal at /#/member. The fragment never reaches the server, so there
+# is no member-specific route to proxy — it is the same SPA either way.
+{$DOMAIN} {
+	encode gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy no-referrer
+		-Server
+	}
+
+	# Member photos and document uploads are the largest thing posted here.
+	request_body {
+		max_size 25MB
+	}
+
+	# Every request goes through exactly one handle block, in the order below.
+
+	# Uptime checks may ask whether the app is up.
+	handle /actuator/health {
+		reverse_proxy app:8080
+	}
+
+	# The rest of actuator (metrics, env, beans, mappings) is for the operator,
+	# not the internet:
+	#   docker compose exec app curl -s localhost:8080/actuator/metrics
+	handle /actuator* {
+		respond 404
+	}
+
+	handle {
+		reverse_proxy app:8080
+	}
+}
