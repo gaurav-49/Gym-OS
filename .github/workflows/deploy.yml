@@ -1,0 +1,162 @@
+# Deploy GYM OS to the Oracle Cloud server.
+#
+# Run it from the Actions tab (or `gh workflow run deploy.yml`). The runner
+# SSHes to the server and executes deploy/install.sh there, which is the same
+# thing you would do by hand — the difference is that the key lives in GitHub's
+# encrypted secrets rather than on somebody's laptop, and every deploy leaves a
+# log.
+#
+# Required repository secrets (Settings → Secrets and variables → Actions):
+#
+#   ORACLE_HOST         the instance's public IP or hostname
+#   ORACLE_USER         the SSH user — 'ubuntu' on Oracle's Ubuntu images
+#   ORACLE_SSH_KEY      the PRIVATE key, whole file including the
+#                       -----BEGIN ... ----- and -----END ... ----- lines
+#
+# Optional:
+#
+#   ORACLE_KNOWN_HOSTS  output of `ssh-keyscan <host>`. Set it to pin the
+#                       server's host key. Without it this workflow accepts
+#                       whatever key the host presents on the first connect,
+#                       which trusts the network for that moment.
+
+name: Deploy to Oracle
+
+on:
+  workflow_dispatch:
+    inputs:
+      domain:
+        description: "Public hostname (blank = <public-ip>.sslip.io)"
+        required: false
+        default: ""
+      seed_demo:
+        description: "Also load the demo gym (120 members, every module)"
+        type: boolean
+        default: false
+      timezone:
+        description: "Local time for reports, schedules and expiry dates"
+        required: false
+        default: "Asia/Kolkata"
+
+# One deploy at a time. Two installers racing on the same machine would fight
+# over /opt/gym-os and the Docker daemon.
+concurrency:
+  group: deploy-oracle
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check the secrets are set
+        env:
+          HOST: ${{ secrets.ORACLE_HOST }}
+          USER: ${{ secrets.ORACLE_USER }}
+          KEY: ${{ secrets.ORACLE_SSH_KEY }}
+        run: |
+          missing=""
+          [ -n "$HOST" ] || missing="$missing ORACLE_HOST"
+          [ -n "$USER" ] || missing="$missing ORACLE_USER"
+          [ -n "$KEY" ]  || missing="$missing ORACLE_SSH_KEY"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secret(s):$missing"
+            echo "Add them under Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+
+      # Secrets go in through env rather than ${{ }} inside the script, so
+      # nothing from them is ever pasted into the shell as code.
+      - name: Configure SSH
+        env:
+          HOST: ${{ secrets.ORACLE_HOST }}
+          KEY: ${{ secrets.ORACLE_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ORACLE_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          if [ -n "$KNOWN_HOSTS" ]; then
+            printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          else
+            echo "::warning::ORACLE_KNOWN_HOSTS is not set; trusting the host key on first use."
+            ssh-keyscan -T 15 "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          fi
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Check the server is reachable
+        env:
+          HOST: ${{ secrets.ORACLE_HOST }}
+          USER: ${{ secrets.ORACLE_USER }}
+        run: |
+          ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o ConnectTimeout=20 \
+            "$USER@$HOST" 'echo "connected to $(hostname) — $(. /etc/os-release && echo "$PRETTY_NAME")"'
+
+      - name: Run the installer
+        env:
+          HOST: ${{ secrets.ORACLE_HOST }}
+          USER: ${{ secrets.ORACLE_USER }}
+          DEPLOY_DOMAIN: ${{ inputs.domain }}
+          DEPLOY_SEED: ${{ inputs.seed_demo }}
+          DEPLOY_TZ: ${{ inputs.timezone }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          # Built here and passed over stdin so the remote shell never has to
+          # quote user input back at itself.
+          {
+            echo "set -euo pipefail"
+            echo "export BRANCH=$(printf '%q' "$BRANCH")"
+            [ -n "$DEPLOY_DOMAIN" ] && echo "export DOMAIN=$(printf '%q' "$DEPLOY_DOMAIN")"
+            [ "$DEPLOY_SEED" = "true" ] && echo "export SEED_DEMO=1"
+            [ -n "$DEPLOY_TZ" ] && echo "export TZ=$(printf '%q' "$DEPLOY_TZ")"
+            echo 'curl -fsSL "https://raw.githubusercontent.com/${{ github.repository }}/${BRANCH}/deploy/install.sh" -o /tmp/install.sh'
+            echo 'sudo -E bash /tmp/install.sh'
+          } > /tmp/remote.sh
+
+          ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o ConnectTimeout=20 \
+            "$USER@$HOST" 'bash -s' < /tmp/remote.sh
+
+      - name: Check both portals answer
+        env:
+          HOST: ${{ secrets.ORACLE_HOST }}
+          USER: ${{ secrets.ORACLE_USER }}
+        run: |
+          ssh -i ~/.ssh/id_deploy -o BatchMode=yes "$USER@$HOST" bash -se <<'REMOTE'
+          set -uo pipefail
+          cd /opt/gym-os
+          domain=$(grep -E '^DOMAIN=' .env | cut -d= -f2-)
+          echo "Domain: $domain"
+          echo
+          echo "-- containers --"
+          sudo docker compose -p gym-os ps
+          echo
+          echo "-- health (from inside the app container) --"
+          sudo docker compose -p gym-os exec -T app curl -fsS localhost:8080/actuator/health || echo "health check failed"
+          echo
+          echo "-- staff portal / --"
+          curl -sS -o /dev/null -w "HTTP %{http_code}\n" "https://$domain/" || echo "not reachable over HTTPS yet"
+          echo "-- the member portal is the same document; #/member is client-side --"
+          REMOTE
+
+      - name: Remove the key from the runner
+        if: always()
+        run: rm -f ~/.ssh/id_deploy
+
+      - name: Summary
+        if: success()
+        run: |
+          {
+            echo "### GYM OS deployed"
+            echo
+            echo "Both portals are live on the same origin:"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Staff portal | \`https://<domain>/\` |"
+            echo "| Member portal | \`https://<domain>/#/member\` |"
+            echo
+            echo "The domain is printed in the installer step above."
+            echo
+            echo "If this was the first deploy, change the \`admin\`/\`admin123\` password now."
+          } >> "$GITHUB_STEP_SUMMARY"
