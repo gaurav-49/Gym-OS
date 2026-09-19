@@ -45,7 +45,7 @@ Postgres, the schema and the app, on **http://localhost:8080**.
 One command on a fresh Ubuntu server (written for Oracle Cloud Always Free):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/gaurav-49/gym-os/main/deploy/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/gaurav-49/Gym-OS/main/deploy/install.sh | sudo bash
 ```
 
 It installs Docker, opens the firewall, generates secrets, applies the schema

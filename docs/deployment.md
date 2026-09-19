@@ -6,7 +6,7 @@ On a fresh Ubuntu server — an Oracle Cloud Always Free instance is the case th
 was written for:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/gaurav-49/gym-os/main/deploy/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/gaurav-49/Gym-OS/main/deploy/install.sh | sudo bash
 ```
 
 Ten minutes later both portals are live over HTTPS:
@@ -157,7 +157,7 @@ docker compose -p gym-os -f docker-compose.yml -f docker-compose.prod.yml restar
 docker compose -p gym-os -f docker-compose.yml -f docker-compose.prod.yml down
 
 # update to the latest code
-curl -fsSL https://raw.githubusercontent.com/gaurav-49/gym-os/main/deploy/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/gaurav-49/Gym-OS/main/deploy/install.sh | sudo bash
 ```
 
 ### Backups

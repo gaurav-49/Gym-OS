@@ -2,7 +2,7 @@
 # GYM OS 2.0 one-command deploy for a fresh Ubuntu server (e.g. Oracle Cloud
 # Always Free).
 #
-#   curl -fsSL https://raw.githubusercontent.com/gaurav-49/gym-os/main/deploy/install.sh | sudo bash
+#   curl -fsSL https://raw.githubusercontent.com/gaurav-49/Gym-OS/main/deploy/install.sh | sudo bash
 #
 # What it does:
 #   1. installs Docker (if missing) and adds swap on small machines
@@ -18,7 +18,7 @@
 #   DOMAIN         public hostname (default: <public-ip>.sslip.io)
 #   SEED_DEMO=1    also load the demo gym (120 members, 4 trainers, every module)
 #   TZ             local time for reports and schedules (default: Asia/Kolkata)
-#   REPO_URL       git repository (default: https://github.com/gaurav-49/gym-os.git)
+#   REPO_URL       git repository (default: https://github.com/gaurav-49/Gym-OS.git)
 #   BRANCH         default: main
 #   INSTALL_DIR    default: /opt/gym-os
 #   SKIP_SYSTEM=1  skip Docker install, swap and firewall (machines already set up)
@@ -26,7 +26,7 @@
 
 set -euo pipefail
 
-REPO_URL="${REPO_URL:-https://github.com/gaurav-49/gym-os.git}"
+REPO_URL="${REPO_URL:-https://github.com/gaurav-49/Gym-OS.git}"
 BRANCH="${BRANCH:-main}"
 INSTALL_DIR="${INSTALL_DIR:-/opt/gym-os}"
 PROJECT="${PROJECT:-gym-os}"
