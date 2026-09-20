@@ -171,6 +171,31 @@ say "Checking the app"
 status=$("${COMPOSE[@]}" exec -T app curl -fsS localhost:8080/actuator/health 2>/dev/null \
   | python3 -c 'import json,sys; print(json.load(sys.stdin)["status"])' 2>/dev/null || echo "not responding")
 
+# A local nightly dump does not survive the machine going away, but it does
+# cover the things that actually happen: a bad migration, a mistaken delete,
+# a container rebuild.
+say "Installing the nightly database backup"
+chmod +x deploy/backup.sh
+cat > /etc/cron.d/gym-os-backup <<CRON
+# GYM OS nightly database backup — installed by deploy/install.sh
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+17 3 * * * root GYMOS_DIR=$INSTALL_DIR $INSTALL_DIR/deploy/backup.sh >> /var/log/gym-os-backup.log 2>&1
+CRON
+chmod 644 /etc/cron.d/gym-os-backup
+
+# Runs before opening hours, after the backup, so a bad run still has
+# yesterday's state to restore from.
+say "Installing the daily onboarding + attendance job"
+cat > /etc/cron.d/gym-os-daily <<CRON
+# GYM OS daily onboarding (20-30 members) + attendance (450-600 check-ins)
+# — installed by deploy/install.sh
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+5 4 * * * root cd $INSTALL_DIR && docker compose -p $PROJECT -f docker-compose.yml -f docker-compose.prod.yml run --rm -T migrate sh -c "node seed-daily.js" < /dev/null >> /var/log/gym-os-daily.log 2>&1
+CRON
+chmod 644 /etc/cron.d/gym-os-daily
+
 cat <<EOF
 
 ────────────────────────────────────────────────────────────────────────

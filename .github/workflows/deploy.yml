@@ -90,6 +90,10 @@ on:
         description: "How many members to give attendance to (default 450)"
         required: false
         default: "450"
+      run_daily_seed_now:
+        description: "Run today's onboarding (20-30 members) + attendance (450-600) immediately, instead of waiting for the 04:05 cron. The cron is installed either way."
+        type: boolean
+        default: false
 
 # One deploy at a time. Two installers racing on the same machine would fight
 # over the same directories and the Docker daemon.
@@ -315,6 +319,26 @@ jobs:
 
           ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o ConnectTimeout=20 \
             "$USER@$HOST" 'sudo -E bash -s' < /tmp/seed.sh
+
+      # The 04:05 cron (installed by the migration step above) runs this
+      # every day regardless. This just runs today's copy of it immediately,
+      # for a same-day check that it actually works on the server.
+      - name: Run today's onboarding + attendance now
+        if: inputs.run_daily_seed_now == true
+        env:
+          HOST: ${{ secrets.ORACLE_HOST }}
+          USER: ${{ secrets.ORACLE_USER }}
+        run: |
+          ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o ConnectTimeout=20 \
+            "$USER@$HOST" 'sudo bash -se' <<'REMOTE'
+          set -euo pipefail
+          cd /opt/gym-os
+          echo "==> Backing up before writing"
+          GYMOS_DIR=/opt/gym-os ./deploy/backup.sh || echo "warning: pre-seed backup failed"
+          echo "==> Running today's onboarding + attendance"
+          docker compose -p gym-os -f docker-compose.yml -f docker-compose.shared-edge.yml \
+            run --rm -T migrate sh -c "node seed-daily.js" < /dev/null
+          REMOTE
 
       - name: Check the shared-edge deploy answers
         if: inputs.shared_edge == true

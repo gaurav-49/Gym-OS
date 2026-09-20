@@ -35,6 +35,8 @@
 #      no way to sign in.
 #   6. Deploys the GYM OS app.
 #   7. Brings up the one shared Caddy, fronting both.
+#   8. Installs the nightly backup (03:17) and the daily onboarding +
+#      attendance job (04:05) as cron entries — see db/seed-daily.js.
 #
 # Idempotent: re-running it after either app updates just redeploys both.
 
@@ -132,6 +134,21 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 17 3 * * * root GYMOS_DIR=$GYMOS_DIR $GYMOS_DIR/deploy/backup.sh >> /var/log/gym-os-backup.log 2>&1
 CRON
 chmod 644 /etc/cron.d/gym-os-backup
+
+# Runs before opening hours: the day's onboarding and attendance need to
+# exist before staff start looking at the dashboard, not appear mid-morning.
+# After the backup (3:17), so a bad run has yesterday's state to restore from.
+say "Installing the daily onboarding + attendance job"
+cat > /etc/cron.d/gym-os-daily <<CRON
+# GYM OS daily onboarding (20-30 members) + attendance (450-600 check-ins)
+# — installed by deploy/edge/migrate-to-shared.sh. Runs inside the app's own
+# container so it always uses the schema and code the running app was built
+# from; the migrate image is reused for it, as ensure-admin.js already is.
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+5 4 * * * root cd $GYMOS_DIR && docker compose -p gym-os -f docker-compose.yml -f docker-compose.shared-edge.yml run --rm -T migrate sh -c "node seed-daily.js" < /dev/null >> /var/log/gym-os-daily.log 2>&1
+CRON
+chmod 644 /etc/cron.d/gym-os-daily
 
 say "Deploying GYM OS without its own Caddy"
 ( cd "$GYMOS_DIR" && docker compose -p gym-os \
