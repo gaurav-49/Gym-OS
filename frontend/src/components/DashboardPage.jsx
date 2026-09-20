@@ -84,7 +84,19 @@ const StatCard = ({ card, value, onNavigate }) => {
                     }}
                     title={display}
                 >
-                    {display}
+                    {/* Inter's ₹ glyph sits above the numeral baseline and
+                        carries its own left-side padding at this weight —
+                        every other tile is plain digits, so only a money
+                        tile ever shows it. transform (not a margin/offset
+                        that shifts layout) drops it onto the baseline;
+                        the negative margin cancels the glyph's own padding
+                        so the line still starts flush with the label below. */}
+                    {card.money ? (
+                        <>
+                            <Box component="span" sx={{ fontWeight: 500, display: 'inline-block', ml: '-0.08em', transform: 'translateY(0.07em)' }}>₹</Box>
+                            {display.replace('₹', '')}
+                        </>
+                    ) : display}
                 </Typography>
                 <Typography variant="body2" color="text.secondary" fontWeight={500}>
                     {card.label}
