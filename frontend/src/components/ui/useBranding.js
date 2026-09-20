@@ -37,6 +37,10 @@ export const DEFAULT_BRANDING = {
     gstin: '',
     receipt_note: '',
     powered_by: true,
+    // Off until the server says otherwise: this is a per-install feature
+    // flag (settings.feature_branding_ui), not something to assume on for a
+    // gym this browser hasn't fetched branding for yet.
+    branding_enabled: false,
 };
 
 const STORAGE_KEY = 'gym_branding';

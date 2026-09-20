@@ -87,6 +87,11 @@ public class BrandingServiceImpl implements BrandingService {
             out.put(key, value == null ? "" : value);
         }
         out.put("powered_by", !"false".equalsIgnoreCase(String.valueOf(out.get("powered_by"))));
+        // Not one of the admin-editable ORDER fields: whether the Branding
+        // page/nav item shows at all is a per-install feature flag set
+        // directly in the settings table (default 'N'; see migrate.js), not
+        // something a gym's own admin can turn on from inside the app.
+        out.put("branding_enabled", "Y".equalsIgnoreCase(brandingDao.loadSetting("feature_branding_ui")));
         return out;
     }
 

@@ -10,4 +10,11 @@ public interface BrandingDao {
 
     /** Upsert one branding field. */
     void save(String key, String value);
+
+    /**
+     * A plain (non-{@code brand_}-prefixed) settings row, e.g. the
+     * {@code feature_branding_ui} flag that gates the whole customization UI
+     * per install. {@code null} if the key has never been set.
+     */
+    String loadSetting(String key);
 }

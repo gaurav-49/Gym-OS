@@ -1,6 +1,7 @@
 package com.gymos.branding.dao.impl;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -36,5 +37,12 @@ public class BrandingDaoImpl implements BrandingDao {
             INSERT INTO settings (key, value) VALUES (?, ?)
             ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value""",
             PREFIX + key, value == null ? "" : value);
+    }
+
+    @Override
+    public String loadSetting(String key) {
+        List<String> values = jdbc.queryForList(
+            "SELECT value FROM settings WHERE key = ?", String.class, key);
+        return values.isEmpty() ? null : values.get(0);
     }
 }

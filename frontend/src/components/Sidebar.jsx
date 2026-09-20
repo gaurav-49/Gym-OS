@@ -52,7 +52,9 @@ export const NAV = [
     { id: 7, label: 'Users', icon: ManageAccounts, adminOnly: true },
     { id: 19, label: 'Branches', icon: Store, adminOnly: true },
     { id: 20, label: 'Audit Log', icon: History, adminOnly: true },
-    { id: 22, label: 'Branding', icon: Palette, adminOnly: true },
+    // featureFlag: also gated on brand[key] — a per-install flag from the
+    // server, not just the signed-in user's role (see useBranding.js).
+    { id: 22, label: 'Branding', icon: Palette, adminOnly: true, featureFlag: 'branding_enabled' },
 ];
 
 const initialsOf = (user) => {
@@ -125,7 +127,9 @@ const Sidebar = ({ tab, onNavigate, user, onLogout, isAdmin }) => {
         {/* Nav — the only thing that scrolls, so the logo and the user block
             stay put on a short screen. */}
         <List sx={{ px: 1.5, pt: 1, flexGrow: 1, overflowY: 'auto', minHeight: 0 }}>
-            {NAV.filter(n => n.section || !n.adminOnly || isAdmin).map(n => {
+            {NAV.filter(n => n.section
+                || ((!n.adminOnly || isAdmin) && (!n.featureFlag || brand[n.featureFlag]))
+            ).map(n => {
                 if (n.section) {
                     return (
                         <Typography

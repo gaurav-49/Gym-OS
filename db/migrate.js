@@ -258,6 +258,12 @@ const columns = [
             value TEXT NOT NULL
         )
     `);
+    // Branding customization is a paid feature, not every gym's default —
+    // off (N) unless a reseller flips it to Y for this install's settings row.
+    await pool.query(`
+        INSERT INTO settings (key, value) VALUES ('feature_branding_ui', 'N')
+        ON CONFLICT (key) DO NOTHING
+    `);
     await pool.query(`
         CREATE TABLE IF NOT EXISTS notification_log (
             id         SERIAL PRIMARY KEY,

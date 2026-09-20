@@ -175,7 +175,8 @@ function App() {
     const isAdmin = user.role === 'admin';
     // A non-admin who somehow lands on an admin tab sees the dashboard rather
     // than a blank page.
-    const safeTab = !isAdmin && ADMIN_ONLY_TABS.has(tab) ? 0 : tab;
+    const safeTab = (!isAdmin && ADMIN_ONLY_TABS.has(tab)) || (tab === 22 && !brand.branding_enabled)
+        ? 0 : tab;
     const page = PAGE_TITLES[safeTab] || PAGE_TITLES[0];
 
     const navigate = (id) => {
