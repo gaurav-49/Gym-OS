@@ -84,7 +84,16 @@ const StatCard = ({ card, value, onNavigate }) => {
                     }}
                     title={display}
                 >
-                    {display}
+                    {/* Inter's ₹ glyph sits visibly above the numeral baseline
+                        at this weight — every other tile is plain digits, so
+                        only a money tile ever shows the mismatch. Lighter
+                        weight + a small downward nudge lines it up. */}
+                    {card.money ? (
+                        <>
+                            <Box component="span" sx={{ fontWeight: 500, position: 'relative', top: '0.07em' }}>₹</Box>
+                            {display.replace('₹', '')}
+                        </>
+                    ) : display}
                 </Typography>
                 <Typography variant="body2" color="text.secondary" fontWeight={500}>
                     {card.label}
