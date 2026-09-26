@@ -42,7 +42,12 @@ const daysUntil = (dateStr) => {
 
 const StatCard = ({ card, value, onNavigate }) => {
     const Icon = card.icon;
-    const display = card.money ? moneyShort(value) : Number(value || 0).toLocaleString('en-IN');
+    // The full "₹2,25,309" was overflowing the tile edge on real collection
+    // amounts — none of the other tiles are more than 3-4 digits, so this
+    // was the one value with no width budget. moneyCompact ("₹2.25L") is
+    // the same abbreviation the revenue chart already uses; the exact
+    // figure is still one hover away via the title attribute below.
+    const display = card.money ? moneyCompact(value) : Number(value || 0).toLocaleString('en-IN');
     const clickable = !!onNavigate;
     return (
         <Paper
@@ -82,7 +87,7 @@ const StatCard = ({ card, value, onNavigate }) => {
                         lineHeight: 1.1, fontWeight: 800, whiteSpace: 'nowrap',
                         fontSize: { xs: '1.4rem', sm: '1.75rem', lg: '2.125rem' },
                     }}
-                    title={display}
+                    title={card.money ? moneyShort(value) : display}
                 >
                     {/* Inter's ₹ glyph sits above the numeral baseline and
                         carries its own left-side padding at this weight —
