@@ -715,7 +715,12 @@ public class MemberServiceImpl implements MemberService {
     private String validateDates(Map<String, Object> body) {
         for (String field : DATE_FIELDS) {
             Object v = body.get(field);
-            if (v != null && !Dates.isValidDateString(String.valueOf(v))) {
+            // A date the form left empty is "not given", not a malformed date:
+            // the desk may sign up a member without a date of birth, and the
+            // form posts every field it knows about. Blank was previously
+            // rejected here, which blocked every save that left dob empty.
+            if (v != null && !String.valueOf(v).isBlank()
+                    && !Dates.isValidDateString(String.valueOf(v))) {
                 return field + " must be a valid date in YYYY-MM-DD format";
             }
         }
